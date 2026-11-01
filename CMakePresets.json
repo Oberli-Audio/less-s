@@ -53,11 +53,11 @@
     }
   ],
   "buildPresets": [
-    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}_Standalone", "{{ProductId}}Harness" ] },
-    { "name": "debug", "configurePreset": "debug", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}Harness" ] },
-    { "name": "asan", "configurePreset": "asan", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}Harness" ] },
-    { "name": "tsan", "configurePreset": "tsan", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}Harness" ] },
-    { "name": "rtsan", "configurePreset": "rtsan", "targets": [ "{{ProductId}}Harness" ] }
+    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": [ "LessS_VST3", "LessS_Standalone", "LessSHarness" ] },
+    { "name": "debug", "configurePreset": "debug", "targets": [ "LessS_VST3", "LessSHarness" ] },
+    { "name": "asan", "configurePreset": "asan", "targets": [ "LessS_VST3", "LessSHarness" ] },
+    { "name": "tsan", "configurePreset": "tsan", "targets": [ "LessS_VST3", "LessSHarness" ] },
+    { "name": "rtsan", "configurePreset": "rtsan", "targets": [ "LessSHarness" ] }
   ],
   "testPresets": [
     { "name": "fast", "configurePreset": "release", "filter": { "include": { "label": "fast" } }, "output": { "outputOnFailure": true } },

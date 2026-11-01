@@ -7,8 +7,18 @@
 namespace Params
 {
 // IDs are frozen at the first shared build (rule 19). Never rename, never reuse.
+inline constexpr const char* frequency = "frequency";
+inline constexpr const char* width = "width";
+inline constexpr const char* threshold = "threshold";
+inline constexpr const char* range = "range";
+inline constexpr const char* mode = "mode";
+inline constexpr const char* auto = "auto";
+inline constexpr const char* relative = "relative";
+inline constexpr const char* speed = "speed";
+inline constexpr const char* lookahead = "lookahead";
+inline constexpr const char* listen = "listen";
+inline constexpr const char* stereo = "stereo";
 inline constexpr const char* mix = "mix";
-inline constexpr const char* outGain = "outGain";
 inline constexpr const char* bypass = "bypass";
 
 inline juce::String fmt (double v, int decimals) { return decimals <= 0 ? juce::String (juce::roundToInt (v)) : juce::String (v, decimals); }   // decimals 0 = rounded integer, as paramgen's Python prints it
@@ -17,16 +27,48 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { frequency, 1 }, "Frequency",
+        NormalisableRange<float> (2000.0f, 16000.0f, 0.0f, 0.553295f), 7000.0f,
+        AudioParameterFloatAttributes().withLabel ("Hz")
+            .withStringFromValueFunction ([] (float v, int) { return std::abs (v) >= 1000.0f ? fmt (v / 1000.0, 3) + " kHz" : fmt (v, 2) + " Hz"; })
+            .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); if (t.endsWith ("k") || t.endsWith ("khz")) return (float) (x * 1000.0); return (float) x; })));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { width, 1 }, "Width",
+        NormalisableRange<float> (0.3f, 3.0f, 0.0f, 1.000000f), 1.2f,
+        AudioParameterFloatAttributes().withLabel ("oct")
+            .withStringFromValueFunction ([] (float v, int) { return fmt (v, 1) + " oct"; })
+            .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); return (float) x; })));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { threshold, 1 }, "Threshold",
+        NormalisableRange<float> (-60.0f, 0.0f, 0.0f, 1.000000f), -28.0f,
+        AudioParameterFloatAttributes().withLabel ("dB")
+            .withStringFromValueFunction ([] (float v, int) { return fmt (v, 1) + " dB"; })
+            .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); if (t == "-inf" || t == "-inf db" || t == "off") return -60.0f; double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); return (float) x; })));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { range, 1 }, "Range",
+        NormalisableRange<float> (0.0f, 24.0f, 0.0f, 1.000000f), 8.0f,
+        AudioParameterFloatAttributes().withLabel ("dB")
+            .withStringFromValueFunction ([] (float v, int) { return fmt (v, 1) + " dB"; })
+            .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); if (t == "-inf" || t == "-inf db" || t == "off") return 0.0f; double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); return (float) x; })));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { mode, 1 }, "Mode", StringArray { "Wide", "Split", "Spectral" }, 1,
+        AudioParameterChoiceAttributes()));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { auto, 1 }, "Auto", true,
+        AudioParameterBoolAttributes().withStringFromValueFunction ([] (bool b, int) { return juce::String (b ? "On" : "Off"); })));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { relative, 1 }, "Relative", false,
+        AudioParameterBoolAttributes().withStringFromValueFunction ([] (bool b, int) { return juce::String (b ? "On" : "Off"); })));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { speed, 1 }, "Speed", StringArray { "Fast", "Natural", "Smooth" }, 1,
+        AudioParameterChoiceAttributes()));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { lookahead, 1 }, "Lookahead",
+        NormalisableRange<float> (0.0f, 5.0f, 0.0f, 0.575717f), 0.0f,
+        AudioParameterFloatAttributes().withLabel ("ms").withAutomatable (false)
+            .withStringFromValueFunction ([] (float v, int) { double s = v / 1000.0; return std::abs (s) < 1.0 ? fmt (s * 1000.0, 0) + " ms" : fmt (s, 1) + " s"; })
+            .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); if (t.endsWith ("ms")) return (float) (x); if (t.endsWith ("min") || t.endsWith ("m")) return (float) (x * 1000.0 * 60.0); return (float) (x * 1000.0); })));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { listen, 1 }, "Listen", StringArray { "Off", "Ess", "Delta" }, 0,
+        AudioParameterChoiceAttributes()));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { stereo, 1 }, "Stereo", StringArray { "Link", "Mid", "Dual" }, 0,
+        AudioParameterChoiceAttributes()));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { mix, 1 }, "Mix",
         NormalisableRange<float> (0.0f, 100.0f, 0.0f, 1.000000f), 100.0f,
         AudioParameterFloatAttributes().withLabel ("%")
             .withStringFromValueFunction ([] (float v, int) { return fmt (v, 0) + " %"; })
             .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); return (float) x; })));
-    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { outGain, 1 }, "Output",
-        NormalisableRange<float> (-24.0f, 12.0f, 0.0f, 1.000000f), 0.0f,
-        AudioParameterFloatAttributes().withLabel ("dB")
-            .withStringFromValueFunction ([] (float v, int) { return juce::String (v > 0 ? "+" : "") + fmt (v, 1) + " dB"; })
-            .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); if (t == "-inf" || t == "-inf db" || t == "off") return -24.0f; double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); return (float) x; })));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { bypass, 1 }, "Bypass", false,
         AudioParameterBoolAttributes().withStringFromValueFunction ([] (bool b, int) { return juce::String (b ? "On" : "Off"); })));
     return layout;
@@ -35,8 +77,18 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 // Smoothing per parameter: tau in ms (0 = none) and domain (D.1, Law 5). Read once in prepareToPlay.
 struct Smoothing { const char* id; float tauMs; const char* domain; const char* controlRate; };
 inline constexpr Smoothing smoothing[] = {
+    { frequency, 20.0f, "log", "block" },
+    { width, 20.0f, "log", "block" },
+    { threshold, 20.0f, "db", "block" },
+    { range, 20.0f, "db", "block" },
+    { mode, 0.0f, "crossfade", "event" },
+    { auto, 0.0f, "crossfade", "event" },
+    { relative, 0.0f, "crossfade", "event" },
+    { speed, 0.0f, "crossfade", "event" },
+    { lookahead, 0.0f, "linear", "block" },
+    { listen, 0.0f, "crossfade", "event" },
+    { stereo, 0.0f, "crossfade", "event" },
     { mix, 20.0f, "linear", "block" },
-    { outGain, 20.0f, "db", "block" },
     { bypass, 0.0f, "crossfade", "event" },
 };
 
@@ -44,8 +96,18 @@ inline constexpr Smoothing smoothing[] = {
 // calls slider.setTooltip (tooltipFor (id)) and setHelpText (tooltipFor (id)); never types text.
 struct Help { const char* id; const char* tooltip; const char* meaning; };
 inline constexpr Help help[] = {
-    { mix, "Dry to wet balance (equal power). Range 0 % to 100 %, default 100 %.", "dry / balanced / wet" },
-    { outGain, "Output level after the mix. Range -24.0 dB to +12.0 dB, default 0.0 dB.", "quiet / unity / loud" },
+    { frequency, "Centre of the band the esses sit in. Range 2.000 kHz to 16.000 kHz, default 7.000 kHz.", "lisps / esses / air" },
+    { width, "How wide the listened band is; wider also catches air. Range 0.3 oct to 3.0 oct, default 1.2 oct.", "narrow hiss / esses / wide air" },
+    { threshold, "Where reduction starts; relative to the voice when Relative is on. Range -60.0 dB to 0.0 dB, default -28.0 dB.", "" },
+    { range, "The most it ever takes away, so no ess vanishes. Range 0.0 dB to 24.0 dB, default 8.0 dB.", "none / natural / deep" },
+    { mode, "Wide ducks all, Split the band, Spectral only the hissing bins. Options Wide, Split, Spectral; default Split.", "" },
+    { auto, "Finds the band on the first play, then leaves the knobs to you. Default On.", "" },
+    { relative, "Follows how sibilant a moment is, not how loud. Default Off.", "" },
+    { speed, "Fast grabs the onset, Smooth rides through long esses. Options Fast, Natural, Smooth; default Natural.", "" },
+    { lookahead, "Sees the ess before it arrives; adds that much latency. Range 0 ms to 5 ms, default 0 ms.", "" },
+    { listen, "Ess plays what it hears, Delta only what it removes. Options Off, Ess, Delta; default Off.", "" },
+    { stereo, "Link both channels, Mid only the centre, Dual each on its own. Options Link, Mid, Dual; default Link.", "" },
+    { mix, "Blends the untreated voice back in. Range 0 % to 100 %, default 100 %.", "dry / half / full" },
     { bypass, "Bypass the plugin (latency compensated). Default Off.", "" },
 };
 inline const char* tooltipFor (const char* id) noexcept

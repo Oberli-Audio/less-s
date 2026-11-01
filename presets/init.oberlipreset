@@ -2,11 +2,23 @@
 
 <OberliPreset name="Init" author="Oberli Audio" category="Bed"
               description="The parameter table's defaults."
-              pluginVersion="0.1.0" created="{{Date}}" factory="true">
-  <{{ProductId}}State version="1" dspVersion="1">
+              pluginVersion="0.1.0" created="2026-11-01" factory="true">
+  <LessSState version="1" dspVersion="1">
     <PARAMETERS>
-{{InitParams}}
+      <PARAM id="frequency" value="7000"/>
+      <PARAM id="width" value="1.2"/>
+      <PARAM id="threshold" value="-28"/>
+      <PARAM id="range" value="8"/>
+      <PARAM id="mode" value="1"/>
+      <PARAM id="auto" value="1"/>
+      <PARAM id="relative" value="0"/>
+      <PARAM id="speed" value="1"/>
+      <PARAM id="lookahead" value="0"/>
+      <PARAM id="listen" value="0"/>
+      <PARAM id="stereo" value="0"/>
+      <PARAM id="mix" value="100"/>
+      <PARAM id="bypass" value="0"/>
     </PARAMETERS>
     <Extra/>
-  </{{ProductId}}State>
+  </LessSState>
 </OberliPreset>
