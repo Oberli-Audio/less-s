@@ -101,7 +101,7 @@ in ─┬─ detector: bandpass(Frequency, Width) → peak and RMS followers →
 
 ### 4.4 The ess map
 - An event starts when gain reduction exceeds 1 dB and ends when it falls below 0.5 dB; the bar height is the deepest reduction in that event, the bar width its duration; events older than 8 s scroll off.
-- A bar that reached the Range ceiling gets a `clip`-coloured tick on top; the legend counts them ("one over range"), the tooltip says "raise Range or lower Threshold".
+- A bar that reached the Range ceiling gets a `clip`-colored tick on top; the legend counts them ("one over range"), the tooltip says "raise Range or lower Threshold".
 - Events cross from the audio thread as a small lock-free ring of (time, depth, duration); the display timer runs at 30 Hz and stops when the transport stands still.
 - This is the hero because it answers the question the ear cannot: is it catching esses, or breaths and cymbals too? Breaths show as wide low bars, cymbals as a regular grid; both are visible at a glance.
 
@@ -145,8 +145,7 @@ Init first; then by singer and use: Female Lead Natural, Male Lead Natural, Back
 ## 7. Open decisions for Björn
 - Name: Less S (decided 2026-11-01). Slug `less-s`, plugin ID `LessS`.
 - Accent: Sage #33B679, by the category scheme (decided 2026-11-01): one accent per category, mix tools.
-- Should Spectral be the default mode instead of Split? Split nulls and is zero latency, which fits the live-stream use; Spectral sounds more transparent on dense vocals. The sketch says Split.
-- Learn button on the panel at P, or menu only? The sketch keeps the panel clean and puts it in the menu; a friend test decides.
+- Decided 2026-11-01: default Mode is Split; the Learn button sits on the panel under the Frequency knob (and stays in the menu).
 
 ## 8. Report
 ```
@@ -155,6 +154,6 @@ Hosts: n/a at S
 Brand sheet: complies (output column with Mix, GR meter in ink not accent); logo is a CSS stand-in
 What works well: the histogram shows where the threshold belongs before you listen, the ess map answers "is it catching only esses"; Relative threshold removes the re-setting across a take; Mode as one segmented control instead of three plugins
 Findings: none at S
-Open / recommended: default mode (Schwere 2); Learn placement (1); name and accent (1)
+Open / recommended: none
 Evidence: less-s@1x.png at 100 %, less-s@2x.png
 ```
