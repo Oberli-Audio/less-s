@@ -1,6 +1,6 @@
 # Less S - de-esser (Tier S sketch)
 
-Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent iris #A796F0 (jade went to A B see, mango is Horizon Pad; check the Design System artifact). Static frame: `less-s@1x.png` (880 x 584 at 100 %), `less-s@2x.png` for Retina viewing. Sound side: sound-design-bob is needed for the detector, the split-band crossover and the spectral mode; this sketch states what the DSP must do and the evidence that proves it.
+Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent Sage #33B679 (mix tools, category scheme confirmed 2026-11-01). Static frame: `less-s@1x.png` (880 x 584 at 100 %), `less-s@2x.png` for Retina viewing. Sound side: sound-design-bob is needed for the detector, the split-band crossover and the spectral mode; this sketch states what the DSP must do and the evidence that proves it.
 
 ## 1. G0 brief
 
@@ -32,7 +32,7 @@ Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent iris #A796F0 
 
 1. **Window** 880 x 584 at 100 %, Bone, compact; the sibilance display is the one large sunken well.
 2. **Hero** is what the ear cannot judge: one display well. The spectrum, input (dashed) against output (ink), with the detection band; on its left edge, inside the same well and sharing its level axis, the band-level histogram of the last 8 s drawn vertically with the Threshold line across it (a vocal shows two humps, voice body and esses, and the threshold belongs in the valley between them); underneath the ess map showing each caught ess as a bar of its depth over the last 8 s, a red tick where it hit the Range ceiling. The GR meter is secondary.
-3. **Accent** iris on the set and active only: value arcs and pointers, lit LEDs, selected segments, the detection band and the ess bars (they are the plugin's action, so they carry the accent; the GR meter does not).
+3. **Accent** Sage on the set and active only: value arcs and pointers, lit LEDs, selected segments, the detection band and the ess bars (they are the plugin's action, so they carry the accent; the GR meter does not).
 4. **Sections** in signal-flow order from the table's groups: Detect, Reduce, Sibilance (display, no parameters), Output (Mix 64 px, GR and level meters, output column last).
 5. **States**: modified (pill dims), drawer, About (charcoal page), bypass, Ess listen (display shows only the band, output meter shows the band level, header pill shows "Listening: Ess" in `ink-subtle`), Delta listen (same with "Delta"), Auto learning (a 2 s progress hairline under the Frequency knob, knobs animate to the found values), Spectral mode (the Lookahead knob reads "n/a" and is disabled because the FFT already looks ahead).
 
@@ -144,7 +144,7 @@ Init first; then by singer and use: Female Lead Natural, Male Lead Natural, Back
 
 ## 7. Open decisions for Björn
 - Name: Less S (decided 2026-11-01). Slug `less-s`, plugin ID `LessS`.
-- Accent: iris proposed.
+- Accent: Sage #33B679, by the category scheme (decided 2026-11-01): one accent per category, mix tools.
 - Should Spectral be the default mode instead of Split? Split nulls and is zero latency, which fits the live-stream use; Spectral sounds more transparent on dense vocals. The sketch says Split.
 - Learn button on the panel at P, or menu only? The sketch keeps the panel clean and puts it in the menu; a friend test decides.
 
