@@ -40,7 +40,7 @@ Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent Sage #33B679 
 
 | id | type | name | group | unit / choices | min / max / default |
 |---|---|---|---|---|---|
-| frequency | float | Frequency | Detect | Hz, centre 6 kHz | 2000 / 16000 / 7000 |
+| frequency | float | Frequency | Detect | Hz, center 6 kHz | 2000 / 16000 / 7000 |
 | width | float | Width | Detect | oct | 0.3 / 3 / 1.2 |
 | threshold | float | Threshold | Reduce | dB (dB rel. when Relative) | -60 / 0 / -28 |
 | range | float | Range | Reduce | dB | 0 / 24 / 8 |
@@ -57,7 +57,7 @@ Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent Sage #33B679 
 Default Lookahead is 0 ms (zero latency for live use); the "Studio" presets set 2 ms. Default Auto is on so the first play already finds the band; Relative is off by default because a new user expects the threshold to behave like a compressor's.
 
 Tooltips (one sentence; the generator appends range and default):
-- Frequency: "Centre of the sibilance band Less S listens to; esses sit around 5 to 9 kHz."
+- Frequency: "Center of the sibilance band Less S listens to; esses sit around 5 to 9 kHz."
 - Width: "How wide the listened band is; narrower catches only the hiss, wider also the air."
 - Threshold: "Where reduction starts; with Relative on it is how sibilant a moment must be, not how loud."
 - Range: "The most Less S will ever take away, so a loud ess cannot vanish."
@@ -65,7 +65,7 @@ Tooltips (one sentence; the generator appends range and default):
 - Speed: "Fast grabs the first transient, Smooth rides through longer esses without a dip."
 - Lookahead: "Sees the ess before it arrives; adds that much latency."
 - Listen: "Ess plays what Less S hears, Delta plays only what it removes."
-- Stereo: "Link reduces both channels alike, Mid only the centre, Dual each channel on its own."
+- Stereo: "Link reduces both channels alike, Mid only the center, Dual each channel on its own."
 
 ## 4. Approach and best practice
 
@@ -106,7 +106,7 @@ in ─┬─ detector: bandpass(Frequency, Width) → peak and RMS followers →
 - This is the hero because it answers the question the ear cannot: is it catching esses, or breaths and cymbals too? Breaths show as wide low bars, cymbals as a regular grid; both are visible at a glance.
 
 ### 4.5 Metering
-- GR: downward, ink, "-4.6" readout as a level; separate from the output level meter (sample peak, `meter-hot` above -6 dBFS). Both labelled.
+- GR: downward, ink, "-4.6" readout as a level; separate from the output level meter (sample peak, `meter-hot` above -6 dBFS). Both labeled.
 - In Ess listen, the level meter shows the band's level, so the user can set Threshold by eye while listening.
 
 ### 4.6 Presets (G5, product design)
