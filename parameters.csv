@@ -1,5 +1,5 @@
 id,version_added,type,kind,name,short,group,core,unit,min,max,default,centre,bipolar,choices,steps,format_kind,precision,parse_aliases,automatable,smoothing,smoothing_domain,control_rate,meaning,tooltip,notes
-frequency,1,float,plain,Frequency,Freq,Detect,Y,Hz,2000,16000,7000,6000,N,,0,hz,2,k,Y,20,log,block,lisps / esses / air,Centre of the band the esses sit in,
+frequency,1,float,plain,Frequency,Freq,Detect,Y,Hz,2000,16000,7000,6000,N,,0,hz,2,k,Y,20,log,block,lisps / esses / air,Center of the band the esses sit in,
 width,1,float,plain,Width,Width,Detect,Y,oct,0.3,3,1.2,,N,,0,plain,1,,Y,20,log,block,narrow hiss / esses / wide air,How wide the listened band is; wider also catches air,
 threshold,1,float,plain,Threshold,Thresh,Reduce,Y,dB,-60,0,-28,,N,,0,db,1,,Y,20,db,block,,Where reduction starts; relative to the voice when Relative is on,Unit reads dB rel when relative=1
 range,1,float,plain,Range,Range,Reduce,Y,dB,0,24,8,,N,,0,db,1,,Y,20,db,block,none / natural / deep,"The most it ever takes away, so no ess vanishes",
@@ -9,6 +9,6 @@ relative,1,bool,plain,Relative,Relative,Detect,N,,0,1,0,,N,,2,bool,0,off|on,Y,0,
 speed,1,choice,plain,Speed,Speed,Reduce,N,,0,2,1,,N,Fast|Natural|Smooth,3,choice,0,,Y,0,crossfade,event,,"Fast grabs the onset, Smooth rides through long esses",
 lookahead,1,float,plain,Lookahead,Lookahd,Reduce,N,ms,0,5,0,1.5,N,,0,time,1,,N,0,linear,block,,Sees the ess before it arrives; adds that much latency,Changes reported latency; disabled in Spectral
 listen,1,choice,plain,Listen,Listen,Detect,N,,0,2,0,,N,Off|Ess|Delta,3,choice,0,,Y,0,crossfade,event,,"Ess plays what it hears, Delta only what it removes",
-stereo,1,choice,plain,Stereo,Stereo,Reduce,N,,0,2,0,,N,Link|Mid|Dual,3,choice,0,,Y,0,crossfade,event,,"Link both channels, Mid only the centre, Dual each on its own",
+stereo,1,choice,plain,Stereo,Stereo,Reduce,N,,0,2,0,,N,Link|Mid|Dual,3,choice,0,,Y,0,crossfade,event,,"Link both channels, Mid only the center, Dual each on its own",
 mix,1,float,plain,Mix,Mix,Output,N,%,0,100,100,,N,,0,percent,0,,Y,20,linear,block,dry / half / full,Blends the untreated voice back in,
 bypass,1,bool,bypass,Bypass,Bypass,Output,N,,0,1,0,,N,,2,bool,0,off|on,Y,0,crossfade,event,,Bypass the plugin (latency compensated),

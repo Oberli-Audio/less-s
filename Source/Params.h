@@ -96,7 +96,7 @@ inline constexpr Smoothing smoothing[] = {
 // calls slider.setTooltip (tooltipFor (id)) and setHelpText (tooltipFor (id)); never types text.
 struct Help { const char* id; const char* tooltip; const char* meaning; };
 inline constexpr Help help[] = {
-    { frequency, "Centre of the band the esses sit in. Range 2.000 kHz to 16.000 kHz, default 7.000 kHz.", "lisps / esses / air" },
+    { frequency, "Center of the band the esses sit in. Range 2.000 kHz to 16.000 kHz, default 7.000 kHz.", "lisps / esses / air" },
     { width, "How wide the listened band is; wider also catches air. Range 0.3 oct to 3.0 oct, default 1.2 oct.", "narrow hiss / esses / wide air" },
     { threshold, "Where reduction starts; relative to the voice when Relative is on. Range -60.0 dB to 0.0 dB, default -28.0 dB.", "" },
     { range, "The most it ever takes away, so no ess vanishes. Range 0.0 dB to 24.0 dB, default 8.0 dB.", "none / natural / deep" },
@@ -106,7 +106,7 @@ inline constexpr Help help[] = {
     { speed, "Fast grabs the onset, Smooth rides through long esses. Options Fast, Natural, Smooth; default Natural.", "" },
     { lookahead, "Sees the ess before it arrives; adds that much latency. Range 0 ms to 5 ms, default 0 ms.", "" },
     { listen, "Ess plays what it hears, Delta only what it removes. Options Off, Ess, Delta; default Off.", "" },
-    { stereo, "Link both channels, Mid only the centre, Dual each on its own. Options Link, Mid, Dual; default Link.", "" },
+    { stereo, "Link both channels, Mid only the center, Dual each on its own. Options Link, Mid, Dual; default Link.", "" },
     { mix, "Blends the untreated voice back in. Range 0 % to 100 %, default 100 %.", "dry / half / full" },
     { bypass, "Bypass the plugin (latency compensated). Default Off.", "" },
 };
