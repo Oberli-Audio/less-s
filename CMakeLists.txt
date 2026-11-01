@@ -118,7 +118,13 @@ set(PRODUCT_SOURCES
     Source/PluginEditor.cpp
     Source/PluginEditor.h
     Source/Params.h
-    Source/State.h)
+    Source/State.h
+    Source/dsp/Constants.h
+    Source/dsp/Dynamics.h
+    Source/dsp/Engine.h
+    Source/dsp/Learn.h
+    Source/dsp/Stft.h
+    Source/dsp/Svf.h)
 
 target_sources(LessS PRIVATE ${PRODUCT_SOURCES})
 target_include_directories(LessS PRIVATE Source "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -190,12 +196,15 @@ target_include_directories(LessSHarness PRIVATE Source "${CMAKE_CURRENT_BINARY_D
     "${CMAKE_CURRENT_BINARY_DIR}/LessS_artefacts/JuceLibraryCode")
 target_compile_definitions(LessSHarness PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0
-    JUCE_STRICT_REFCOUNTEDPOINTER=1 JUCE_STANDALONE_APPLICATION=1
-    PRODUCT_IS_INSTRUMENT=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,1,0>)
-# The harness compiles the plugin sources itself with its own copy of the modules (simple and
-# portable; Horizon Pad links the SharedCode library instead, which saves a compile).
-target_sources(LessSHarness PRIVATE ${PRODUCT_SOURCES})
+    JUCE_STRICT_REFCOUNTEDPOINTER=1)
+# The harness links the plugin's SharedCode target rather than compiling the sources again
+# (which is what Horizon Pad does, and what the template's comment pointed at). It has to:
+# since JUCE 8 the JucePlugin_* macros are PUBLIC compile definitions of that target, not a
+# generated JucePluginDefines.h, so a second compile of the same sources cannot see
+# JucePlugin_Name or JucePlugin_VersionString and does not build at all. Linking also saves
+# the duplicate compile of every JUCE module.
 target_link_libraries(LessSHarness PRIVATE
+    LessS
     juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 if (PRODUCT_ASAN)
@@ -250,9 +259,22 @@ if (Python3_FOUND)
                          --harness "$<TARGET_FILE:LessSHarness>" --kind ${PRODUCT_KIND}
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(parameter_table PROPERTIES LABELS "fast;lint")
+        # Tier P and the brief's own category list (presets.categories in docs/brief.md),
+        # not the kit's instrument-flavoured default.
+        #
+        # Without --harness: `presetlint bank --harness` also runs its Init-equals-the-table
+        # check, and that check cannot pass for a `choice` parameter whose default is neither
+        # the first nor the last entry. It compares the harness's normalised echo against the
+        # *plain* index, so Less S's Mode (index 1 of 3, normalised 0.5) and Speed read as
+        # errors (a skills-bob item: the kit wants `fdefault / (steps - 1)` there). The two
+        # properties it would have checked are verified in the suite instead, against the
+        # plugin's own normalisation: Properties.test_init_preset_equals_the_table_defaults
+        # and Properties.test_preset_listing_matches_the_csv.
         add_test(NAME preset_bank
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/dsp-kit/presetlint.py" bank
-                         "${CMAKE_CURRENT_SOURCE_DIR}/presets.csv" --tier S --track ${PRODUCT_KIND} --harness "$<TARGET_FILE:LessSHarness>"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/presets.csv" "${CMAKE_CURRENT_SOURCE_DIR}/parameters.csv"
+                         --tier P --track ${PRODUCT_KIND}
+                         --categories Lead,Backing,Speech,Live,Instruments
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(preset_bank PROPERTIES ENVIRONMENT "${HARNESS_ENV}" LABELS "fast;lint")
     else()

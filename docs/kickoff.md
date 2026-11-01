@@ -1,6 +1,6 @@
 # Less S: kickoff
 
-Build order 3 of 5. Effect, Bone theme, accent iris, plugin code `Less`, Tier P. Repo created from the template and initialised on 2026-11-01; parameter table and sketch are in.
+Build order 3 of 5. Effect, Bone theme, accent sage #33B679 (the category accent for mix tools, decided 2026-11-01; the kickoff was written with iris), plugin code `Less`, Tier P. Repo created from the template and initialised on 2026-11-01; parameter table and sketch are in.
 
 ## Prompt for the cloud session (started on Oberli-Audio/less-s, VST3 project attached)
 

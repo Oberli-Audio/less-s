@@ -4,7 +4,7 @@ width,1,float,plain,Width,Width,Detect,Y,oct,0.3,3,1.2,,N,,0,plain,1,,Y,20,log,b
 threshold,1,float,plain,Threshold,Thresh,Reduce,Y,dB,-60,0,-28,,N,,0,db,1,,Y,20,db,block,,Where reduction starts; relative to the voice when Relative is on,Unit reads dB rel when relative=1
 range,1,float,plain,Range,Range,Reduce,Y,dB,0,24,8,,N,,0,db,1,,Y,20,db,block,none / natural / deep,"The most it ever takes away, so no ess vanishes",
 mode,1,choice,plain,Mode,Mode,Reduce,Y,,0,2,1,,N,Wide|Split|Spectral,3,choice,0,,Y,0,crossfade,event,,"Wide ducks all, Split the band, Spectral only the hissing bins",Latency: Spectral 256 samples
-auto,1,bool,plain,Auto,Auto,Detect,N,,0,1,1,,N,,2,bool,0,off|on,Y,0,crossfade,event,,"Finds the band on the first play, then leaves the knobs to you","One-shot Learn, not a tracker"
+autoLearn,1,bool,plain,Auto,Auto,Detect,N,,0,1,1,,N,,2,bool,0,off|on,Y,0,crossfade,event,,"Finds the band on the first play, then leaves the knobs to you","One-shot Learn, not a tracker"
 relative,1,bool,plain,Relative,Relative,Detect,N,,0,1,0,,N,,2,bool,0,off|on,Y,0,crossfade,event,,"Follows how sibilant a moment is, not how loud",
 speed,1,choice,plain,Speed,Speed,Reduce,N,,0,2,1,,N,Fast|Natural|Smooth,3,choice,0,,Y,0,crossfade,event,,"Fast grabs the onset, Smooth rides through long esses",
 lookahead,1,float,plain,Lookahead,Lookahd,Reduce,N,ms,0,5,0,1.5,N,,0,time,1,,N,0,linear,block,,Sees the ess before it arrives; adds that much latency,Changes reported latency; disabled in Spectral

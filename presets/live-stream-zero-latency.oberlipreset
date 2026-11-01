@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<OberliPreset name="Live Stream Zero Latency" author="Oberli Audio" category="Live"
+              description="Zero latency and Fast: Lookahead 0, Split, Auto off so nothing moves mid-service."
+              pluginVersion="0.1.0" created="2026-11-01" factory="true">
+  <LessSState version="1" dspVersion="1">
+    <PARAMETERS>
+      <PARAM id="frequency" value="7000"/>
+      <PARAM id="width" value="1.2"/>
+      <PARAM id="threshold" value="-30"/>
+      <PARAM id="range" value="6"/>
+      <PARAM id="mode" value="1"/>
+      <PARAM id="autoLearn" value="0"/>
+      <PARAM id="relative" value="0"/>
+      <PARAM id="speed" value="0"/>
+      <PARAM id="lookahead" value="0"/>
+      <PARAM id="listen" value="0"/>
+      <PARAM id="stereo" value="0"/>
+      <PARAM id="mix" value="100"/>
+      <PARAM id="bypass" value="0"/>
+    </PARAMETERS>
+    <Extra/>
+  </LessSState>
+</OberliPreset>

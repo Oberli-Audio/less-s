@@ -6,8 +6,7 @@
 
 namespace
 {
-template <typename T>
-T* param (juce::AudioProcessorValueTreeState& apvts, const char* id)
+std::atomic<float>* param (juce::AudioProcessorValueTreeState& apvts, const char* id)
 {
     auto* p = apvts.getRawParameterValue (id);
     jassert (p != nullptr);   // the table and the code disagree: parameters.csv is the source
@@ -17,39 +16,59 @@ T* param (juce::AudioProcessorValueTreeState& apvts, const char* id)
 
 LessSAudioProcessor::LessSAudioProcessor()
     : AudioProcessor (BusesProperties()
-#if ! PRODUCT_IS_INSTRUMENT
                           .withInput ("Input", juce::AudioChannelSet::stereo(), true)
-#endif
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMETERS", Params::createParameterLayout())
 {
-    outGainParam = param<std::atomic<float>> (apvts, Params::outGain);
-#if ! PRODUCT_IS_INSTRUMENT
-    mixParam = param<std::atomic<float>> (apvts, Params::mix);
-    bypassParam = param<std::atomic<float>> (apvts, Params::bypassParameterId);
-#endif
+    frequencyParam = param (apvts, Params::frequency);
+    widthParam = param (apvts, Params::width);
+    thresholdParam = param (apvts, Params::threshold);
+    rangeParam = param (apvts, Params::range);
+    modeParam = param (apvts, Params::mode);
+    autoLearnParam = param (apvts, Params::autoLearn);
+    relativeParam = param (apvts, Params::relative);
+    speedParam = param (apvts, Params::speed);
+    lookaheadParam = param (apvts, Params::lookahead);
+    listenParam = param (apvts, Params::listen);
+    stereoParam = param (apvts, Params::stereo);
+    mixParam = param (apvts, Params::mix);
+    bypassParam = param (apvts, Params::bypassParameterId);
+
+    // 20 Hz is often enough for Learn: the analysis needs two seconds of audio first, so
+    // the poll costs one atomic read per 50 ms (D.1: never triggerAsyncUpdate from audio).
+    if (juce::MessageManager::getInstanceWithoutCreating() != nullptr)
+        startTimer (50);
+}
+
+LessSAudioProcessor::~LessSAudioProcessor()
+{
+    stopTimer();
+}
+
+lesss::dsp::Parameters LessSAudioProcessor::readParameters() const noexcept
+{
+    lesss::dsp::Parameters p;
+    p.frequency = frequencyParam->load();
+    p.width = widthParam->load();
+    p.threshold = thresholdParam->load();
+    p.range = rangeParam->load();
+    p.mode = (int) std::lround (modeParam->load());
+    p.autoLearn = autoLearnParam->load() >= 0.5f;
+    p.relative = relativeParam->load() >= 0.5f;
+    p.speed = (int) std::lround (speedParam->load());
+    p.lookaheadMs = lookaheadParam->load();
+    p.listen = (int) std::lround (listenParam->load());
+    p.stereo = (int) std::lround (stereoParam->load());
+    p.mix = mixParam->load();
+    p.bypass = bypassParam->load() >= 0.5f;
+    return p;
 }
 
 void LessSAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
-    // smoothing from the table (Params::smoothing): tau in ms -> JUCE ramp length (settle in about 4.6 tau)
-    auto tauMs = [] (const char* id) { for (const auto& s : Params::smoothing) if (std::strcmp (s.id, id) == 0) return s.tauMs; return 0.0f; };
-    gainSmoothed.reset (sampleRate, (double) tauMs (Params::outGain) * 4.6 / 1000.0);
-    gainSmoothed.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outGainParam->load()));
-#if ! PRODUCT_IS_INSTRUMENT
-    mixSmoothed.reset (sampleRate, (double) tauMs (Params::mix) * 4.6 / 1000.0);
-    mixSmoothed.setCurrentAndTargetValue (mixParam->load() / 100.0f);
-    dryBuffer.setSize (2, juce::jmax (1, samplesPerBlock), false, false, true);
-#else
-    for (auto& v : voices)
-    {
-        v = Voice {};
-        v.env.setSampleRate (sampleRate);
-        v.env.setParameters ({ 0.01f, 0.1f, 0.8f, 0.3f });
-    }
-    sustainDown = false;
-#endif
+    engine.prepare (sampleRate, juce::jmax (1, samplesPerBlock));
+
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) juce::jmax (1, samplesPerBlock), 1 };
     for (auto* f : { &rmsFilterL, &rmsFilterR })
     {
@@ -60,6 +79,10 @@ void LessSAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     }
     rmsL.store (0.0f);
     rmsR.store (0.0f);
+
+    const auto p = readParameters();
+    reportedLatency = engine.latencyFor (p);
+    setLatencySamples (reportedLatency);
 }
 
 void LessSAudioProcessor::releaseResources() {}
@@ -68,175 +91,110 @@ bool LessSAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 {
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
-#if ! PRODUCT_IS_INSTRUMENT
-    if (layouts.getMainInputChannelSet() != juce::AudioChannelSet::stereo()
-        && layouts.getMainInputChannelSet() != juce::AudioChannelSet::mono())
-        return false;
-#endif
-    return true;
+    return layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo()
+        || layouts.getMainInputChannelSet() == juce::AudioChannelSet::mono();
 }
 
 double LessSAudioProcessor::getTailLengthSeconds() const
 {
-#if PRODUCT_IS_INSTRUMENT
-    return 0.3;   // the release of the skeleton's envelope; the real instrument reports its longest tail (D.2.5)
-#else
+    // A de-esser has no tail of its own; what it does have is reported latency, which the
+    // host compensates separately. Lookahead and the STFT frame are not a tail (D.2.5).
     return 0.0;
-#endif
 }
 
 juce::AudioProcessorParameter* LessSAudioProcessor::getBypassParameter() const
 {
-#if PRODUCT_IS_INSTRUMENT
-    return nullptr;   // rule 7 does not apply to an instrument
-#else
     return apvts.getParameter (Params::bypassParameterId);
-#endif
+}
+
+void LessSAudioProcessor::updateLatency (const lesss::dsp::Parameters& p)
+{
+    const int wanted = engine.latencyFor (p);
+    if (wanted != reportedLatency)
+    {
+        reportedLatency = wanted;
+        // Changing Mode or Lookahead changes the latency; the host re-measures. The sketch
+        // (4.7) accepts that a change while the transport runs may click once.
+        setLatencySamples (wanted);
+    }
 }
 
 void LessSAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
-    // an effect passes the input through, an instrument is silent; output channels beyond the input are cleared
+    juce::ScopedNoDenormals noDenormals;
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
+    if (buffer.getNumSamples() == 0)
+        return;
+    // rule 7: the bypassed path is delayed by the reported latency, so it nulls against the
+    // input and switching bypass does not shift the signal in time.
+    auto p = readParameters();
+    p.bypass = true;
+    engine.process (buffer, p);
 }
-
-#if PRODUCT_IS_INSTRUMENT
-void LessSAudioProcessor::noteOn (int note, float velocity)
-{
-    Voice* slot = nullptr;
-    for (auto& v : voices)
-        if (v.note == note) { slot = &v; break; }                  // retrigger the same key
-    if (slot == nullptr)
-        for (auto& v : voices)
-            if (! v.active()) { slot = &v; break; }
-    if (slot == nullptr)
-        for (auto& v : voices)
-            if (! v.env.isActive()) { slot = &v; break; }
-    if (slot == nullptr)
-        slot = &voices[0];                                             // steal the first (the real instrument: oldest released, D.5)
-    slot->note = note;
-    slot->velocity = velocity;
-    slot->phase = 0.0f;
-    slot->env.noteOn();
-}
-
-void LessSAudioProcessor::noteOff (int note)
-{
-    for (auto& v : voices)
-        if (v.note == note)
-            v.env.noteOff();
-}
-
-void LessSAudioProcessor::renderVoices (juce::AudioBuffer<float>& out, int start, int numSamples)
-{
-    const float bend = std::pow (2.0f, pitchBendSemitones / 12.0f);
-    for (auto& v : voices)
-    {
-        if (! v.active())
-            continue;
-        if (! v.env.isActive())
-        {
-            v.note = -1;
-            continue;
-        }
-        const float hz = 440.0f * std::pow (2.0f, (float) (v.note - 69) / 12.0f) * bend;
-        v.increment = hz / (float) currentSampleRate;
-        auto* l = out.getWritePointer (0);
-        auto* r = out.getNumChannels() > 1 ? out.getWritePointer (1) : nullptr;
-        const float vibrato = modWheel * 0.005f;
-        for (int i = start; i < start + numSamples; ++i)
-        {
-            const float e = v.env.getNextSample();
-            const float s = std::sin (v.phase * juce::MathConstants<float>::twoPi) * v.velocity * 0.2f * e;
-            v.phase += v.increment * (1.0f + vibrato * std::sin ((float) i * 0.001f));
-            if (v.phase >= 1.0f) v.phase -= 1.0f;
-            l[i] += s;
-            if (r != nullptr) r[i] += s;
-        }
-    }
-}
-#endif
 
 void LessSAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    juce::ignoreUnused (midi);
     const int numSamples = buffer.getNumSamples();
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, numSamples);
     if (numSamples == 0)   // a zero-length block is legal (harness contract, D.5.1)
         return;
 
-    gainSmoothed.setTargetValue (juce::Decibels::decibelsToGain (outGainParam->load()));
+    const auto p = readParameters();
+    updateLatency (p);
+    engine.process (buffer, p);
 
-#if PRODUCT_IS_INSTRUMENT
-    buffer.clear();
-    // MIDI at sample offsets (rule 16): split the block at every event
-    int pos = 0;
-    for (const auto metadata : midi)
-    {
-        const auto msg = metadata.getMessage();
-        const int at = juce::jlimit (0, numSamples, metadata.samplePosition);
-        if (at > pos)
-        {
-            renderVoices (buffer, pos, at - pos);
-            pos = at;
-        }
-        if (msg.isNoteOn())            noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
-        else if (msg.isNoteOff())      { if (! sustainDown) noteOff (msg.getNoteNumber()); }
-        else if (msg.isSustainPedalOn())  sustainDown = true;
-        else if (msg.isSustainPedalOff()) { sustainDown = false; for (auto& v : voices) if (v.active()) v.env.noteOff(); }
-        else if (msg.isPitchWheel())   pitchBendSemitones = 2.0f * (float) (msg.getPitchWheelValue() - 8192) / 8192.0f;
-        else if (msg.isController() && msg.getControllerNumber() == 1) modWheel = (float) msg.getControllerValue() / 127.0f;
-        else if (msg.isAllNotesOff() || msg.isAllSoundOff()) { for (auto& v : voices) v = Voice {}; }
-    }
-    if (pos < numSamples)
-        renderVoices (buffer, pos, numSamples - pos);
-    midi.clear();
-#else
-    juce::ignoreUnused (midi);
-    if (bypassParam->load() >= 0.5f)
-    {
-        processBlockBypassed (buffer, midi);
-        return;
-    }
-    // the skeleton's "wet" path is the input itself; the real effect renders into the buffer here
-    const int channels = juce::jmin (2, buffer.getNumChannels());
-    for (int ch = 0; ch < channels; ++ch)
-        dryBuffer.copyFrom (ch, 0, buffer, ch, 0, numSamples);
-    mixSmoothed.setTargetValue (mixParam->load() / 100.0f);
-    for (int i = 0; i < numSamples; ++i)
-    {
-        const float m = mixSmoothed.getNextValue();
-        const float dry = std::cos (m * juce::MathConstants<float>::halfPi);   // equal power
-        const float wet = std::sin (m * juce::MathConstants<float>::halfPi);
-        for (int ch = 0; ch < channels; ++ch)
-        {
-            auto* out = buffer.getWritePointer (ch);
-            out[i] = dryBuffer.getSample (ch, i) * dry + out[i] * wet;
-        }
-    }
-#endif
-
-    // output gain, smoothed per sample (Law 5), then the level the editor shows
+    // the level the editor shows (20 ms RMS per channel, D.6.2)
     auto* l = buffer.getWritePointer (0);
     auto* r = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
     float lastL = 0.0f, lastR = 0.0f;
     for (int i = 0; i < numSamples; ++i)
     {
-        const float g = gainSmoothed.getNextValue();
-        l[i] *= g;
         lastL = rmsFilterL.processSample (0, l[i]);
         if (r != nullptr)
-        {
-            r[i] *= g;
             lastR = rmsFilterR.processSample (0, r[i]);
-        }
     }
     rmsL.store (lastL, std::memory_order_relaxed);
     rmsR.store (r != nullptr ? lastR : lastL, std::memory_order_relaxed);
 }
 
+//==============================================================================
+void LessSAudioProcessor::requestLearn()
+{
+    engine.requestLearn();
+}
+
+lesss::dsp::LearnResult LessSAudioProcessor::runLearnNow()
+{
+    const auto result = engine.runLearn();
+    lastLearn = result;
+    if (! result.found)
+        return result;
+    // Written as a user edit so the host records one undo step and the preset shows
+    // modified (sketch 4.2). Nothing else is touched: Learn is not a tracker.
+    struct Write { const char* id; float value; };
+    const Write writes[] = { { Params::frequency, (float) result.frequency },
+                             { Params::width, (float) result.width } };
+    for (const auto& w : writes)
+        if (auto* p = apvts.getParameter (w.id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (w.value));
+            p->endChangeGesture();
+        }
+    return result;
+}
+
+void LessSAudioProcessor::timerCallback()
+{
+    if (engine.learnReady())
+        runLearnNow();
+}
+
+//==============================================================================
 juce::AudioProcessorEditor* LessSAudioProcessor::createEditor()
 {
     return new LessSAudioProcessorEditor (*this);

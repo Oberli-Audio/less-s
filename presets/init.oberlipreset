@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<OberliPreset name="Init" author="Oberli Audio" category="Bed"
-              description="The parameter table's defaults."
+<OberliPreset name="Init" author="Oberli Audio" category="Lead"
+              description="The parameter table's defaults: Split, Auto on, 8 dB of Range at 7 kHz."
               pluginVersion="0.1.0" created="2026-11-01" factory="true">
   <LessSState version="1" dspVersion="1">
     <PARAMETERS>
@@ -10,7 +10,7 @@
       <PARAM id="threshold" value="-28"/>
       <PARAM id="range" value="8"/>
       <PARAM id="mode" value="1"/>
-      <PARAM id="auto" value="1"/>
+      <PARAM id="autoLearn" value="1"/>
       <PARAM id="relative" value="0"/>
       <PARAM id="speed" value="1"/>
       <PARAM id="lookahead" value="0"/>

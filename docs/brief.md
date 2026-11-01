@@ -65,4 +65,8 @@ open_questions: []
 ```
 
 ## Amendments
+- 2026-11-01: Accent is **sage #33B679**, the category accent for mix tools (one accent per
+  category; peacock #039BE5 is analysis). It replaces iris #A796F0 from the sketch. Owner's
+  call, relayed with the CLAUDE.md and sketch update on `main`; the registry entry in
+  bob-skills is still to follow. Nothing is released, so no build carried iris.
 - 2026-11-01: Owner decisions confirmed with the brief: default Mode is Split; the Learn button sits on the panel under the Frequency knob (and stays in the menu); the histogram is a strip inside the spectrum well with a machine-local on/off toggle, default on; LookAndFeel and meters come from the shared Source/oberli/ code (bob-skills).
