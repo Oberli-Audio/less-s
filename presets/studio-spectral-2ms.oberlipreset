@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<OberliPreset name="Studio Spectral 2 ms" author="Oberli Audio" category="Lead"
+              description="The transparent one: Spectral, for a dense vocal where Split still dulls the top."
+              pluginVersion="0.1.0" created="2026-11-01" factory="true">
+  <LessSState version="1" dspVersion="1">
+    <PARAMETERS>
+      <PARAM id="frequency" value="7200"/>
+      <PARAM id="width" value="1.3"/>
+      <PARAM id="threshold" value="-32"/>
+      <PARAM id="range" value="8"/>
+      <PARAM id="mode" value="2"/>
+      <PARAM id="autoLearn" value="1"/>
+      <PARAM id="relative" value="0"/>
+      <PARAM id="speed" value="1"/>
+      <PARAM id="lookahead" value="2"/>
+      <PARAM id="listen" value="0"/>
+      <PARAM id="stereo" value="0"/>
+      <PARAM id="mix" value="100"/>
+      <PARAM id="bypass" value="0"/>
+    </PARAMETERS>
+    <Extra/>
+  </LessSState>
+</OberliPreset>

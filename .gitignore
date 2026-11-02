@@ -70,7 +70,10 @@ __pycache__/
 /sound design/renders/
 /sound design/panel/
 *.wav
-!tests/golden/*.wav
+# the goldens live in tools/tests/golden (CMakeLists GOLDEN_DIR); the template's pattern
+# was `!tests/golden/*.wav`, which is anchored at the repo root and never matched them,
+# so every golden would have been silently left out of the commit
+!/tools/tests/golden/*.wav
 *.aif
 *.aiff
 *.mp3

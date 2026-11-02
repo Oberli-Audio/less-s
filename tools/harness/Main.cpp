@@ -18,6 +18,7 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "PluginProcessor.h"
+#include "Params.h"
 #include "State.h"
 #include "BuildInfo.h"
 
@@ -438,17 +439,72 @@ double dbOf (double lin) { return lin > 0.0 ? 20.0 * std::log10 (lin) : -300.0; 
 } // namespace
 
 //==============================================================================
-// Product hooks (the two TODOs of the contract). The skeleton has no solo parts and no product
-// metrics; a product fills these in beside its DSP (Horizon Pad: layers, keyboard, mix pocket).
-static bool applySolo (juce::AudioProcessor&, const juce::String& part)
+// Product hooks (the two TODOs of the contract), filled in for Less S.
+//
+// --solo picks one of the detector's outputs instead of the plugin's own output, so a
+// measurement script can look at the sidechain without the Listen parameter (which is part
+// of the product and has its own tests). It is a parameter write, not a separate code path:
+// whatever --solo does has to be something a user could do too, or the harness would be
+// measuring code that never ships.
+static bool applySolo (juce::AudioProcessor& processor, const juce::String& part)
 {
-    juce::ignoreUnused (part);
+    auto* product = dynamic_cast<LessSAudioProcessor*> (&processor);
+    if (product == nullptr)
+        return false;
+    auto set = [&] (const char* id, float plain)
+    {
+        if (auto* p = product->parameters().getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 (plain));
+    };
+    if (part == "band")   { set (Params::listen, 1.0f); return true; }   // Listen: Ess
+    if (part == "delta")  { set (Params::listen, 2.0f); return true; }   // Listen: Delta
     return false;   // unknown part: refused with exit 2
 }
 
-static juce::var productMetrics (const juce::AudioBuffer<float>&, double)
+// The `product` object: the numbers that are about Less S and not about any plugin. The
+// ess map and Learn are defining features of the brief, so rule 13 wants a presence test
+// for each, and a test can only assert on what the harness reports.
+static juce::var productMetrics (juce::AudioProcessor& processor, const juce::AudioBuffer<float>&, double)
 {
-    return obj();
+    auto out = obj();
+    auto* product = dynamic_cast<LessSAudioProcessor*> (&processor);
+    if (product == nullptr)
+        return out;
+
+    set (out, "gain_reduction_db", (double) product->gainReductionDb());
+    set (out, "band_level_db", (double) product->bandLevelDb());
+
+    // the ess map, drained from the lock-free ring the audio thread filled
+    juce::var events;
+    int hitRange = 0;
+    lesss::dsp::EssEvent e;
+    while (product->popEssEvent (e))
+    {
+        auto o = obj();
+        set (o, "start_s", e.startSeconds);
+        set (o, "duration_s", (double) e.durationSeconds);
+        set (o, "depth_db", (double) e.depthDb);
+        set (o, "hit_range", e.hitRange);
+        events.append (o);
+        if (e.hitRange)
+            ++hitRange;
+    }
+    set (out, "ess_events", events);
+    set (out, "ess_event_count", events.isArray() ? events.size() : 0);
+    set (out, "ess_events_at_range", hitRange);
+
+    // Learn: the analysis runs here, after the render, exactly as the message thread runs
+    // it in a host - so the Auto presence test needs no host and no GUI.
+    auto learn = obj();
+    if (product->learnPending())
+        product->runLearnNow();
+    const auto r = product->lastLearnResult();
+    set (learn, "found", r.found);
+    set (learn, "frequency_hz", r.found ? juce::var (r.frequency) : juce::var());
+    set (learn, "width_oct", r.found ? juce::var (r.width) : juce::var());
+    set (learn, "sibilant_frames", r.sibilantFrames);
+    set (out, "learn", learn);
+    return out;
 }
 
 //==============================================================================
@@ -639,7 +695,11 @@ static int run (int argc, char* argv[])
     int midiFileIndex = 0;
     juce::int64 pos = 0;
     juce::int64 total = (juce::int64) std::llround (seconds * rate);
-    juce::AudioBuffer<float> work (2, maxBlock);
+    // The work buffer has to hold the largest block that will actually be rendered, which
+    // is not maxBlock: --block=1024 --max-block=256 is the whole point of D.5.1's
+    // "a block larger than the one you announced", and sizing this to maxBlock alone wrote
+    // 1024 samples into a 256-sample allocation ("malloc(): corrupted top size").
+    juce::AudioBuffer<float> work (2, juce::jmax (block, maxBlock));
     juce::MidiBuffer midi;
 
     while (pos < total)
@@ -651,7 +711,7 @@ static int run (int argc, char* argv[])
             const double remaining = seconds - now;
             rate = r.rate; maxBlock = r.block; if (! randomBlocks) block = r.block;
             total = pos + (juce::int64) std::llround (remaining * rate);
-            work.setSize (2, maxBlock, false, false, true);
+            work.setSize (2, juce::jmax (block, maxBlock), false, false, true);
             processor->prepareToPlay (rate, maxBlock);   // no releaseResources: pluginval's non-releasing case
         }
         while (nextPreset < presetAts.size() && presetAts[nextPreset].t <= now)
@@ -766,7 +826,15 @@ static int run (int argc, char* argv[])
     set (root, "contract", 3);
     {
         auto applied = obj();
-        set (applied, "seed", seed); set (applied, "sample_rate", rate); set (applied, "block", randomBlocks ? juce::var (blockArg) : juce::var (block));
+        set (applied, "seed", seed);
+        // An integral rate is echoed as an integer, not as 48000.0: dspkit's assert_echo
+        // compares the echo to the request *as a string*, so `sample_rate=48000` against a
+        // JUCE double echo reads "48000" vs "48000.0" and `dspkit.py smoke` fails for any
+        // product. Same number either way; a numeric comparison in the kit would be the
+        // real fix (a skills-bob item, see docs/status.md).
+        set (applied, "sample_rate", rate == std::floor (rate) && std::abs (rate) < 2.0e9
+                                       ? juce::var ((int) rate) : juce::var (rate));
+        set (applied, "block", randomBlocks ? juce::var (blockArg) : juce::var (block));
         set (applied, "max_block", maxBlock); set (applied, "seconds", seconds);
         set (applied, "preset", presetName.isEmpty() ? juce::var() : juce::var (presetName)); set (applied, "solo", solo.isEmpty() ? juce::var() : juce::var (solo));
         auto params = obj();
@@ -814,7 +882,7 @@ static int run (int argc, char* argv[])
         set (pr, "first_block_pct", firstBlockPct); set (pr, "warmup_blocks", warmup);
         set (root, "profile", pr);
     }
-    set (root, "product", productMetrics (out, rate));
+    set (root, "product", productMetrics (*processor, out, rate));
     std::cout << juce::JSON::toString (root, true) << std::endl;
 
     if (stateRefused.isNotEmpty()) { std::cerr << "error: --state-in " << stateRefused << std::endl; return 2; }

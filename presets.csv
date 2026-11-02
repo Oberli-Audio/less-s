@@ -1,2 +1,10 @@
 slug,name,category,tags,edge,author,notes
-init,Init,Bed,,N,Oberli Audio,the parameter table's defaults (category: the brief's list; Bed until G0 decides)
+init,Init,Lead,,N,Oberli Audio,Init = the parameter table's defaults (presetlint checks it)
+female-lead-natural,Female Lead Natural,Lead,,N,Oberli Audio,
+male-lead-natural,Male Lead Natural,Lead,,N,Oberli Audio,
+backing-vocals-smooth,Backing Vocals Smooth,Backing,,N,Oberli Audio,
+spoken-word,Spoken Word,Speech,,N,Oberli Audio,"Threshold is dB relative here, not dBFS"
+live-stream-zero-latency,Live Stream Zero Latency,Live,,Y,Oberli Audio,
+studio-spectral-2ms,Studio Spectral 2 ms,Lead,,Y,Oberli Audio,Lookahead reads n/a in Spectral: the frame is the look-ahead
+hi-hat-tamer,Hi-Hat Tamer,Instruments,,Y,Oberli Audio,
+acoustic-guitar-squeak,Acoustic Guitar Squeak,Instruments,,N,Oberli Audio,

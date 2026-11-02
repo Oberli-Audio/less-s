@@ -8,22 +8,25 @@
 #include <cstring>
 
 #include "Params.h"
+#include "dsp/Engine.h"
 
 /*  Less S - the processor.
 
-    Thread model (sound-design-bob rule 1, D.1): the audio thread reads parameters through cached
-    atomics, never by string lookup; nothing on the audio thread allocates, locks or logs; every
-    parameter that reaches the audio path is smoothed with the table's tau (Params::smoothing).
-    State is State.h's format. The editor reads what the processor publishes as atomics only.
+    Thread model (sound-design-bob rule 1, D.1): the audio thread reads parameters through
+    cached atomics, never by string lookup; nothing on the audio thread allocates, locks or
+    logs; every parameter that reaches the audio path is smoothed with the table's tau
+    (Params::smoothing), inside the engine. State is State.h's format. The editor reads what
+    the processor publishes as atomics and one lock-free ring.
 
-    This is the template's skeleton: effect with the parameters of parameters.csv (outGain and,
-    for an effect, bypass and mix). sound-design-bob replaces the DSP at G4 behind the same
-    contract; plugin-ui-bob replaces the editor at G2. Keep the lifecycle calls as they are. */
-class LessSAudioProcessor final : public juce::AudioProcessor
+    The DSP itself is `Source/dsp/Engine.h`, ported by structure from
+    `sound design/proto/less_s.py` (G4); this class only moves parameters in and meters out,
+    reports latency (rule 7) and drives Learn off the audio thread. */
+class LessSAudioProcessor final : public juce::AudioProcessor,
+                                  private juce::Timer
 {
 public:
     LessSAudioProcessor();
-    ~LessSAudioProcessor() override = default;
+    ~LessSAudioProcessor() override;
 
     // AudioProcessor
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -36,7 +39,7 @@ public:
     bool hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override { return PRODUCT_IS_INSTRUMENT != 0; }
+    bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override;
@@ -58,39 +61,68 @@ public:
     /** The parameter tree; the editor attaches to it, the harness sets values through it. */
     juce::AudioProcessorValueTreeState& parameters() { return apvts; }
 
-    /** What the editor may read from the audio thread: the 20 ms RMS per channel (D.6.2). */
-    float outputLevel (int channel) const noexcept { return channel == 0 ? rmsL.load (std::memory_order_relaxed) : rmsR.load (std::memory_order_relaxed); }
+    //==========================================================================
+    // What the editor may read from the audio thread (D.6.2).
+
+    /** The 20 ms RMS per channel of the output. */
+    float outputLevel (int channel) const noexcept
+    {
+        return channel == 0 ? rmsL.load (std::memory_order_relaxed) : rmsR.load (std::memory_order_relaxed);
+    }
+
+    /** The gain reduction in dB (positive = reducing), for the GR meter. */
+    float gainReductionDb() const noexcept { return engine.gainReductionDb(); }
+
+    /** The detector's band level in dB - dB relative when Relative is on - which is what
+        the histogram strip bins (sketch 4.3). */
+    float bandLevelDb() const noexcept { return engine.bandLevelDb(); }
+
+    /** The next caught ess, or false when the ring is empty (the ess map, sketch 4.4). */
+    bool popEssEvent (lesss::dsp::EssEvent& out) noexcept { return engine.popEvent (out); }
+
+    //==========================================================================
+    // Learn (sketch 4.2). The analysis never runs on the audio thread.
+
+    /** The editor's Learn button and the host menu item: capture the next two seconds. */
+    void requestLearn();
+
+    /** True when two seconds are captured and `runLearnNow` would do the analysis. The
+        harness uses this after a render; in a host the timer below does it. */
+    bool learnPending() const noexcept { return engine.learnReady(); }
+
+    /** Runs the analysis and writes Frequency and Width through begin/perform/end edit,
+        so the host records one undo step. Message thread only. */
+    lesss::dsp::LearnResult runLearnNow();
+
+    /** The last Learn result, for the editor's "No esses found yet" line and the harness. */
+    lesss::dsp::LearnResult lastLearnResult() const { return lastLearn; }
 
 private:
+    void timerCallback() override;
+    lesss::dsp::Parameters readParameters() const noexcept;
+    void updateLatency (const lesss::dsp::Parameters& p);
+
     juce::AudioProcessorValueTreeState apvts;
 
     // cached parameter pointers (never string lookups on the audio thread)
-    std::atomic<float>* outGainParam = nullptr;
-#if ! PRODUCT_IS_INSTRUMENT
+    std::atomic<float>* frequencyParam = nullptr;
+    std::atomic<float>* widthParam = nullptr;
+    std::atomic<float>* thresholdParam = nullptr;
+    std::atomic<float>* rangeParam = nullptr;
+    std::atomic<float>* modeParam = nullptr;
+    std::atomic<float>* autoLearnParam = nullptr;
+    std::atomic<float>* relativeParam = nullptr;
+    std::atomic<float>* speedParam = nullptr;
+    std::atomic<float>* lookaheadParam = nullptr;
+    std::atomic<float>* listenParam = nullptr;
+    std::atomic<float>* stereoParam = nullptr;
     std::atomic<float>* mixParam = nullptr;
     std::atomic<float>* bypassParam = nullptr;
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> mixSmoothed;
-    juce::AudioBuffer<float> dryBuffer;
-#else
-    // the skeleton instrument: a tiny polyphonic sine with an ADSR, replaced at G4
-    struct Voice
-    {
-        int note = -1;
-        float phase = 0.0f, increment = 0.0f, velocity = 0.0f;
-        juce::ADSR env;
-        bool active() const noexcept { return note >= 0; }
-    };
-    static constexpr int kMaxVoices = 8;
-    std::array<Voice, kMaxVoices> voices;
-    bool sustainDown = false;
-    float pitchBendSemitones = 0.0f;   // from the wheel, +/- 2 st
-    float modWheel = 0.0f;
-    void noteOn (int note, float velocity);
-    void noteOff (int note);
-    void renderVoices (juce::AudioBuffer<float>& out, int start, int numSamples);
-#endif
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> gainSmoothed;
+
+    lesss::dsp::Engine engine;
+    lesss::dsp::LearnResult lastLearn;
     double currentSampleRate = 48000.0;
+    int reportedLatency = 0;
     std::atomic<float> rmsL { 0.0f }, rmsR { 0.0f };
     juce::dsp::BallisticsFilter<float> rmsFilterL, rmsFilterR;
 

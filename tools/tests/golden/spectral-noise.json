@@ -1,0 +1,22 @@
+{
+  "flags": {
+    "seed": 1,
+    "sample_rate": 48000.0,
+    "block": 512,
+    "seconds": 2.0,
+    "signal": "noise:pink:-12"
+  },
+  "params": {
+    "threshold": 0.25,
+    "range": 0.5,
+    "mode": 1.0,
+    "autoLearn": 0.0
+  },
+  "arch": "x86_64",
+  "feedback": false,
+  "latency_samples": 256,
+  "note": "Spectral, same settings: the STFT path and its 256-sample latency.",
+  "tolerance": "F.8: same machine and build bit-identical (peak < -140 dBFS); across slices or compilers, feed-forward, peak < -100 dBFS",
+  "rendered": "2026-11-01",
+  "commit": "1a3490aad6e0"
+}

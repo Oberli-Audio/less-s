@@ -12,7 +12,7 @@ inline constexpr const char* width = "width";
 inline constexpr const char* threshold = "threshold";
 inline constexpr const char* range = "range";
 inline constexpr const char* mode = "mode";
-inline constexpr const char* auto = "auto";
+inline constexpr const char* autoLearn = "autoLearn";
 inline constexpr const char* relative = "relative";
 inline constexpr const char* speed = "speed";
 inline constexpr const char* lookahead = "lookahead";
@@ -49,7 +49,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             .withValueFromStringFunction ([] (const juce::String& s) { juce::String t = s.trim().replace (",", ".").toLowerCase(); if (t == "-inf" || t == "-inf db" || t == "off") return 0.0f; double x = t.retainCharacters ("0123456789.+-").getDoubleValue(); return (float) x; })));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { mode, 1 }, "Mode", StringArray { "Wide", "Split", "Spectral" }, 1,
         AudioParameterChoiceAttributes()));
-    layout.add (std::make_unique<AudioParameterBool> (ParameterID { auto, 1 }, "Auto", true,
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { autoLearn, 1 }, "Auto", true,
         AudioParameterBoolAttributes().withStringFromValueFunction ([] (bool b, int) { return juce::String (b ? "On" : "Off"); })));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { relative, 1 }, "Relative", false,
         AudioParameterBoolAttributes().withStringFromValueFunction ([] (bool b, int) { return juce::String (b ? "On" : "Off"); })));
@@ -82,7 +82,7 @@ inline constexpr Smoothing smoothing[] = {
     { threshold, 20.0f, "db", "block" },
     { range, 20.0f, "db", "block" },
     { mode, 0.0f, "crossfade", "event" },
-    { auto, 0.0f, "crossfade", "event" },
+    { autoLearn, 0.0f, "crossfade", "event" },
     { relative, 0.0f, "crossfade", "event" },
     { speed, 0.0f, "crossfade", "event" },
     { lookahead, 0.0f, "linear", "block" },
@@ -101,7 +101,7 @@ inline constexpr Help help[] = {
     { threshold, "Where reduction starts; relative to the voice when Relative is on. Range -60.0 dB to 0.0 dB, default -28.0 dB.", "" },
     { range, "The most it ever takes away, so no ess vanishes. Range 0.0 dB to 24.0 dB, default 8.0 dB.", "none / natural / deep" },
     { mode, "Wide ducks all, Split the band, Spectral only the hissing bins. Options Wide, Split, Spectral; default Split.", "" },
-    { auto, "Finds the band on the first play, then leaves the knobs to you. Default On.", "" },
+    { autoLearn, "Finds the band on the first play, then leaves the knobs to you. Default On.", "" },
     { relative, "Follows how sibilant a moment is, not how loud. Default Off.", "" },
     { speed, "Fast grabs the onset, Smooth rides through long esses. Options Fast, Natural, Smooth; default Natural.", "" },
     { lookahead, "Sees the ess before it arrives; adds that much latency. Range 0 ms to 5 ms, default 0 ms.", "" },
