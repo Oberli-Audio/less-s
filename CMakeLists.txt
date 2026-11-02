@@ -182,10 +182,23 @@ if (PRODUCT_RELEASE_SYMBOLS)
         target_compile_options(LessS PUBLIC $<$<CONFIG:Release>:-g>)
         foreach(format VST3 Standalone)
             if (TARGET LessS_${format})
+                # LTO links through a temporary object that ld deletes, and dsymutil finds the
+                # debug map's /tmp/lto.o gone: the dSYM came out without DWARF. Keep the LTO
+                # object, one per slice: a universal link runs ld once per architecture, and a
+                # shared path leaves only the last slice's object for dsymutil.
+                file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lto")
+                foreach(arch arm64 x86_64)
+                    target_link_options(LessS_${format} PRIVATE "SHELL:-Xarch_${arch} -Wl,-object_path_lto,${CMAKE_CURRENT_BINARY_DIR}/lto/${format}-${arch}.o")
+                endforeach()
+                # strip modifies the binary JUCE has just signed, and arm64 macOS kills any
+                # process that loads a bundle with a broken signature (pluginval, the Steinberg
+                # validator and every host exited with signal 9): sign again, ad hoc, as the
+                # release workflow does.
                 add_custom_command(TARGET LessS_${format} POST_BUILD
                     COMMAND dsymutil "$<TARGET_FILE:LessS_${format}>" -o "$<TARGET_BUNDLE_DIR:LessS_${format}>.dSYM"
                     COMMAND strip -x "$<TARGET_FILE:LessS_${format}>"
-                    COMMENT "dSYM and strip: ${format}"
+                    COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:LessS_${format}>"
+                    COMMENT "dSYM, strip and ad-hoc signature: ${format}"
                     VERBATIM)
             endif()
         endforeach()
@@ -300,6 +313,14 @@ if (Python3_FOUND)
                          --harness "$<TARGET_FILE:LessSHarness>" --kind ${PRODUCT_KIND}
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(parameter_table PROPERTIES LABELS "fast;lint")
+        if (APPLE AND PRODUCT_RELEASE_SYMBOLS)
+            # the bundles the release preset makes: signed after strip, dSYM with DWARF per slice
+            add_test(NAME bundle_signature_and_symbols
+                     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/tests/check_bundle.py"
+                             "$<TARGET_BUNDLE_DIR:LessS_VST3>" "$<TARGET_BUNDLE_DIR:LessS_Standalone>"
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+            set_tests_properties(bundle_signature_and_symbols PROPERTIES LABELS fast)
+        endif()
         add_test(NAME bounce_null
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/tests/check_bounce.py"
                          --harness "$<TARGET_FILE:LessSHarness>" --kind ${PRODUCT_KIND}

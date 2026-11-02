@@ -604,6 +604,137 @@ class NullAgainstPrototype(Timed):
                         % (r["peak_dbfs"], r["residual_dbfs"]))
 
 
+class PresetBank(Timed):
+    """F.14.3 and the release gate's `presetlint render` line, for an effect (EX-3).
+
+    `presetlint render` drives an effect with the harness's default impulse, so its loudness,
+    true-peak and click figures are the impulse's. These tests render every row of presets.csv
+    the way a friend uses it - the test phrase through the preset - and judge the bank on that.
+    The CPU per preset is `perf.py run --presets all`, the release gate's own row."""
+    label = "render"
+    SPREAD_LU = 1.0          # Tier P: every preset within +/-1 LU of the bank median (F.14.3)
+    CEILING_DBTP = -1.0      # the phrase peaks at -8.5 dBTP; a de-esser only takes away
+    CLICK_PEAK_DBFS = -70.0  # time-domain peak above the band; bank -79.4 at worst, a stepped gain -53 at best
+
+    @staticmethod
+    def _bank():
+        import csv
+        from xml.etree import ElementTree as ET
+        with open(REPO / "presets.csv", newline="") as f:
+            slugs = [r["slug"] for r in csv.DictReader(f)]
+        values = {}
+        for slug in slugs:
+            root = ET.parse(REPO / "presets" / (slug + ".oberlipreset")).getroot()
+            values[slug] = {p.get("id"): float(p.get("value")) for p in root.iter("PARAM")}
+        return slugs, values
+
+    def _render(self, slug, src, out, seconds, **flags):
+        res = K.render(HARNESS, None, **{**DEFAULT, "preset": slug, "seconds": seconds},
+                       **{"in": str(src), "out": str(out)}, **flags)
+        K.assert_echo(res, None, preset=slug)                              # rule 13
+        return res
+
+    def test_every_preset_is_healthy_and_level_matched(self):
+        """NaN/Inf 0, no clipped sample, true peak under the ceiling, integrated LUFS within
+        +/-1 LU of the bank median - Init included: Less S's Init is a working setting."""
+        import statistics
+        path, _, x = material("phrase")
+        seconds = len(x) / 48000.0
+        slugs, _ = self._bank()
+        lufs = {}
+        with factory_bank(), tempfile.TemporaryDirectory() as d:
+            for slug in slugs:
+                with self.subTest(preset=slug):
+                    out = Path(d) / (slug + ".wav")
+                    res = self._render(slug, path, out, seconds)
+                    y, fs = K.read_wav(out)
+                    self.assertEqual(res["health"]["nan"] + res["health"]["inf"], 0, "%s: NaN/Inf" % slug)
+                    self.assertEqual(res["health"]["clipped_samples"], 0, "%s: clipped samples" % slug)
+                    tp = K.true_peak_dbtp(y, fs)
+                    self.assertLess(tp, self.CEILING_DBTP, "%s: true peak %.2f dBTP" % (slug, tp))
+                    lufs[slug] = K.integrated_lufs(y, fs)
+        med = statistics.median(lufs.values())
+        print("\n    bank median %.2f LUFS; " % med
+              + ", ".join("%s %+.2f" % (s, v - med) for s, v in lufs.items()), end="")
+        for slug, v in lufs.items():
+            self.assertLess(abs(v - med), self.SPREAD_LU,
+                            "%s is %+.2f LU from the bank median (Tier P allows +/-%.1f)"
+                            % (slug, v - med, self.SPREAD_LU))
+
+    def test_no_preset_clicks_when_it_works(self):
+        """No click: a raised-cosine burst train at the preset's own Frequency, so its detector
+        fires and its gain moves. A gain step is broadband; smooth ballistics only put
+        sidebands next to the tone. So the output, brick-wall high-passed above
+        max(12 kHz, 1.7 x Frequency), must peak under CLICK_PEAK_DBFS in the *time domain*,
+        against an input whose own peak there is under -120 dBFS.
+
+        Time domain, not the FFT bin the brief's sideband figure uses: a click's energy is
+        spread over every bin, so a planted 0.25-step gain read under -90 dBFS per bin and
+        passed. Measured (2026-11-02, arm64): the bank peaks at -79.4 dBFS at worst (Spoken
+        Word), the stepped-gain build at -53.0 to -42.5 on every time-domain preset.
+        (`max_click_db` cannot judge this either: the phrase's noise esses read -0.2 dB dry.)"""
+        import numpy as np
+        slugs, values = self._bank()
+        fs, n = 48000.0, 48000
+        t = np.arange(n) / fs
+        phase = (t * 4.0) % 1.0                               # 4 bursts a second, 125 ms each, like esses
+        gate = np.where(phase < 0.5, 0.5 - 0.5 * np.cos(2 * np.pi * phase / 0.5), 0.0)
+        f = np.fft.rfftfreq(n, 1.0 / fs)
+
+        def hf_peak_dbfs(x, fc):
+            X = np.fft.rfft(x, n)
+            X[f <= fc] = 0.0
+            return 20 * math.log10(float(np.max(np.abs(np.fft.irfft(X, n)))) + 1e-30)
+
+        peaks = {}
+        with factory_bank(), tempfile.TemporaryDirectory() as d:
+            for slug in slugs:
+                with self.subTest(preset=slug):
+                    f0 = values[slug]["frequency"]
+                    fc = max(12000.0, 1.7 * f0)
+                    mono = np.sin(2 * np.pi * f0 * t) * gate * 10 ** (-12.0 / 20)
+                    src = Path(d) / ("burst-%s.wav" % slug)
+                    K.write_wav(src, np.stack([mono, mono], axis=1), fs)
+                    x32, _ = K.read_wav(src)
+                    floor = hf_peak_dbfs(x32[:, 0], fc)
+                    self.assertLess(floor, -120.0, "%s: the test signal's own floor is %.1f dBFS" % (slug, floor))
+                    out = Path(d) / ("y-%s.wav" % slug)
+                    self._render(slug, src, out, 1.0)
+                    y, _ = K.read_wav(out)
+                    # the gain must have moved, or nothing was tested. Not the ess-map count:
+                    # with Natural's or Smooth's release the reduction never falls back between
+                    # bursts 125 ms apart, so the one event stays open until the input stops
+                    taken = K.rms_dbfs(x32) - K.rms_dbfs(y[:n])
+                    self.assertGreater(taken, 1.0, "%s: took %.2f dB off the bursts, so the gain "
+                                                   "never moved and nothing was tested" % (slug, taken))
+                    peaks[slug] = hf_peak_dbfs(y[:n, 0], fc)
+                    self.assertLess(peaks[slug], self.CLICK_PEAK_DBFS,
+                                    "%s: peaks at %.1f dBFS above %.0f Hz while the gain moves (a click)"
+                                    % (slug, peaks[slug], fc))
+        print("\n    peak above the band: " + ", ".join("%s %.1f" % kv for kv in peaks.items()), end="")
+
+    def test_every_preset_round_trips_its_state(self):
+        """D.5.3 per preset: state out, in, out is bytewise identical and the render after the
+        load is bit-identical to the preset's own."""
+        path, _, _ = material("phrase")
+        slugs, _ = self._bank()
+        with factory_bank(), tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for slug in slugs:
+                with self.subTest(preset=slug):
+                    self._render(slug, path, d / "a.wav", 1.0, state_out=d / "a.state")
+                    res = K.render(HARNESS, None, **{**DEFAULT, "seconds": 1.0},
+                                   **{"in": str(path), "out": str(d / "b.wav"),
+                                      "state_in": d / "a.state", "state_out": d / "b.state"})
+                    self.assertEqual((d / "a.state").read_bytes(), (d / "b.state").read_bytes(),
+                                     "%s: the state changed on load and save" % slug)
+                    xa, _ = K.read_wav(d / "a.wav")
+                    xb, _ = K.read_wav(d / "b.wav")
+                    self.assertTrue(xa.shape == xb.shape and (xa == xb).all(),
+                                    "%s: the render after the state load differs" % slug)
+                    self.assertEqual(res["health"]["nan"], 0)
+
+
 # CTest registration (CMakeLists.txt of the project):
 #   add_test(NAME py-fast   COMMAND ${Python3_EXECUTABLE} tools/tests/test_template.py --label fast)
 #   add_test(NAME py-render COMMAND ${Python3_EXECUTABLE} tools/tests/test_template.py --label render)
@@ -621,7 +752,7 @@ if __name__ == "__main__":
         loader = unittest.TestLoader()
         suite = unittest.TestSuite()
         for cls in (Contract, RateAndBlock, Health, Properties, MustDo, Goldens,
-                    DefiningFeatures, NullAgainstPrototype):
+                    DefiningFeatures, NullAgainstPrototype, PresetBank):
             if cls.label == label:
                 suite.addTests(loader.loadTestsFromTestCase(cls))
         t0 = time.time()
