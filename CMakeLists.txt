@@ -126,7 +126,30 @@ set(PRODUCT_SOURCES
     Source/dsp/Stft.h
     Source/dsp/Svf.h)
 
+# The family's shared code: Source/oberli/ is a byte copy of ~/bob-skills
+# tools/template-src/Source/oberli (Loudness, Analysis, References, RenderSafety, the
+# LookAndFeel and the Strip frame), refreshed with tools/refresh_oberli.py, never edited here.
+file(GLOB OBERLI_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/oberli/*.cpp"
+                                          "${CMAKE_CURRENT_SOURCE_DIR}/Source/oberli/*.h")
+list(APPEND PRODUCT_SOURCES ${OBERLI_SOURCES})
+
 target_sources(LessS PRIVATE ${PRODUCT_SOURCES})
+# The shared code's type and marks (Rubik's five static weights as Google Fonts serves them,
+# unmodified, SIL OFL 1.1: LICENSES/OFL-1.1.txt and notices.toml; the Logo group's four SVGs), and
+# the product's own files the plugin reads at run time: LICENSE and THIRD_PARTY_NOTICES.md for
+# About (compiled in, never a URL), presets.csv and the factory bank for the preset drawer.
+file(GLOB OBERLI_ASSETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/oberli/assets/fonts/*.ttf"
+                                         "${CMAKE_CURRENT_SOURCE_DIR}/Source/oberli/assets/logo/*.svg")
+juce_add_binary_data(OberliUiData HEADER_NAME OberliUiData.h NAMESPACE OberliUiData SOURCES ${OBERLI_ASSETS})
+set_target_properties(OberliUiData PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+file(GLOB PRODUCT_FACTORY_PRESETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/presets/*.oberlipreset")
+juce_add_binary_data(ProductData HEADER_NAME ProductData.h NAMESPACE ProductData
+    SOURCES LICENSE THIRD_PARTY_NOTICES.md presets.csv ${PRODUCT_FACTORY_PRESETS})
+set_target_properties(ProductData PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+# The theme by kind (instruments Charcoal, effects Bone) and the accent of the product's category
+# (the registry; plugin-ui-bob brand sheet), read by Source/oberli/OberliLookAndFeel.h.
+set(PRODUCT_OBERLI_DEFINITIONS OBERLI_THEME_BONE=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,0,1> OBERLI_ACCENT=0xFF33B679)
+target_compile_definitions(LessS PUBLIC ${PRODUCT_OBERLI_DEFINITIONS})
 target_include_directories(LessS PRIVATE Source "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(LessS
     PUBLIC
@@ -139,6 +162,8 @@ target_compile_definitions(LessS
         PRODUCT_IS_INSTRUMENT=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,1,0>)
 target_link_libraries(LessS
     PRIVATE
+        OberliUiData
+        ProductData
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -196,7 +221,7 @@ target_include_directories(LessSHarness PRIVATE Source "${CMAKE_CURRENT_BINARY_D
     "${CMAKE_CURRENT_BINARY_DIR}/LessS_artefacts/JuceLibraryCode")
 target_compile_definitions(LessSHarness PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0
-    JUCE_STRICT_REFCOUNTEDPOINTER=1)
+    JUCE_STRICT_REFCOUNTEDPOINTER=1 ${PRODUCT_OBERLI_DEFINITIONS})
 # The harness links the plugin's SharedCode target rather than compiling the sources again
 # (which is what Horizon Pad does, and what the template's comment pointed at). It has to:
 # since JUCE 8 the JucePlugin_* macros are PUBLIC compile definitions of that target, not a
@@ -204,6 +229,7 @@ target_compile_definitions(LessSHarness PRIVATE
 # JucePlugin_Name or JucePlugin_VersionString and does not build at all. Linking also saves
 # the duplicate compile of every JUCE module.
 target_link_libraries(LessSHarness PRIVATE
+    OberliUiData ProductData
     LessS
     juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
@@ -220,6 +246,21 @@ if (PRODUCT_TSAN AND NOT MSVC)
     target_compile_options(LessSHarness PRIVATE -fsanitize=thread)
     target_link_options(LessSHarness PRIVATE -fsanitize=thread)
 endif()
+# LessSGuiSnapshot: the real editor rendered offscreen to PNG at any scale and state
+# (tools/gui_snapshot/Main.cpp; plugin-ui-bob audio-plugins.md 15). Built on demand, never shipped:
+#   cmake --build build --target LessSGuiSnapshot
+juce_add_console_app(LessSGuiSnapshot PRODUCT_NAME "LessSGuiSnapshot")
+target_sources(LessSGuiSnapshot PRIVATE tools/gui_snapshot/Main.cpp ${PRODUCT_SOURCES})
+target_include_directories(LessSGuiSnapshot PRIVATE Source "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_compile_definitions(LessSGuiSnapshot PRIVATE
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0
+    JUCE_STRICT_REFCOUNTEDPOINTER=1 JUCE_STANDALONE_APPLICATION=1
+    PRODUCT_IS_INSTRUMENT=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,1,0> ${PRODUCT_OBERLI_DEFINITIONS}
+    JucePlugin_Name="$<TARGET_PROPERTY:LessS,JUCE_PLUGIN_NAME>" JucePlugin_VersionString="${PROJECT_VERSION}")
+target_link_libraries(LessSGuiSnapshot PRIVATE OberliUiData ProductData
+    juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats
+    juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+
 # Real-time safety (rule 1): the harness with RealtimeSanitizer; needs LLVM 20+ (the rtsan
 # preset takes the compiler from $LLVM_ROOT, set by `toolchain.py env`). processBlock runs as a
 # real-time context and any allocation, lock or system call aborts with a stack trace.
@@ -259,6 +300,11 @@ if (Python3_FOUND)
                          --harness "$<TARGET_FILE:LessSHarness>" --kind ${PRODUCT_KIND}
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(parameter_table PROPERTIES LABELS "fast;lint")
+        add_test(NAME bounce_null
+                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/tests/check_bounce.py"
+                         --harness "$<TARGET_FILE:LessSHarness>" --kind ${PRODUCT_KIND}
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+        set_tests_properties(bounce_null PROPERTIES ENVIRONMENT "${HARNESS_ENV}" LABELS fast)
         # Tier P and the brief's own category list (presets.categories in docs/brief.md),
         # not the kit's instrument-flavoured default.
         #
@@ -280,4 +326,37 @@ if (Python3_FOUND)
     else()
         message(STATUS "python3 without numpy and scipy: the test suite is not registered")
     endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# The shared code's own tests (Source/oberli/), label fast: Loudness against EBU Tech 3341
+# and 3342 at 44.1 to 192 kHz (plain C++), and OberliTests for what needs JUCE (Analysis,
+# References, RenderSafety). They need no Python, so they are registered in every build.
+# ---------------------------------------------------------------------------
+enable_testing()
+add_executable(OberliLoudnessTest tools/tests/test_loudness.cpp Source/oberli/Loudness.cpp)
+target_include_directories(OberliLoudnessTest PRIVATE Source)
+# The build presets name the plugin's targets only: CTest builds the two test programs itself first.
+add_test(NAME oberli_build_tests
+         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config $<CONFIG> --target OberliLoudnessTest OberliTests)
+set_tests_properties(oberli_build_tests PROPERTIES LABELS fast FIXTURES_SETUP oberli_tests)
+add_test(NAME oberli_loudness COMMAND OberliLoudnessTest)
+set_tests_properties(oberli_loudness PROPERTIES LABELS fast FIXTURES_REQUIRED oberli_tests)
+
+juce_add_console_app(OberliTests PRODUCT_NAME "OberliTests")
+target_sources(OberliTests PRIVATE tools/tests/test_oberli.cpp Source/oberli/Analysis.cpp Source/oberli/Folders.cpp
+    Source/oberli/Loudness.cpp Source/oberli/References.cpp)
+target_include_directories(OberliTests PRIVATE Source)
+target_compile_definitions(OberliTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1
+    JucePlugin_Name="$<TARGET_PROPERTY:LessS,JUCE_PLUGIN_NAME>" JucePlugin_VersionString="${PROJECT_VERSION}")
+target_link_libraries(OberliTests PRIVATE juce::juce_audio_formats juce::juce_dsp juce::juce_gui_basics
+    juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+add_test(NAME oberli_shared COMMAND OberliTests)
+set_tests_properties(oberli_shared PROPERTIES LABELS fast FIXTURES_REQUIRED oberli_tests)
+if (Python3_FOUND)
+    # Source/oberli/ is the template's copy, byte for byte (its MANIFEST.sha256)
+    add_test(NAME oberli_copy
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/refresh_oberli.py" --check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_tests_properties(oberli_copy PROPERTIES LABELS "fast;lint")
 endif()
