@@ -1,5 +1,8 @@
 # Handoff: from the cloud session to Visual Studio
 
+> **Done 2026-11-02** on Björn's Mac (work on `main`): steps 1-4 ran; the results and what is
+> still open are in `docs/status.md`. Kept for the "What the editor needs" context below.
+
 Less S is at **G6**. G0-G5 are closed with evidence (`docs/status.md`); what is left needs
 the validators, the hosts and Björn's own machines, which a Linux cloud container does not
 have. This file is the prompt for the session that takes it from here, plus the context that

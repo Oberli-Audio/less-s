@@ -1,23 +1,45 @@
-# Status - Less S 0.1.0 (2026-11-01)
+# Status - Less S 0.1.0 (2026-11-02)
 Tier P, track E (effect), at gate G6. Recipe D.8.1.
 
-G1 to G5 are closed with evidence; G6 needs the validators and the two hosts, which only
-exist on Björn's machines. Everything was built in a Linux cloud container, so every number
-below comes from an x86_64 Linux Release build - the sound numbers carry over, the CPU row
-does not (see Waiting for Björn).
+G1 to G5 are closed with evidence and hold on Björn's Mac (M3 Pro, arm64 and the x86_64 slice
+under Rosetta). G6's unattended sound side is green here: validators, RTSan, ASan + UBSan, the
+CPU row, the bank (EX-3 closed). What is left of G6 needs Björn: the two hosts, a decision on
+Plugalyzer, the CPU row once more on the power adapter, and the editor's half of G6 (the editor
+is still the stub; the shared code it needs arrived with this checkpoint).
 
 ## Waiting for Björn
 One line each, newest first. Nothing here blocks the rest of the work.
 
-- 2026-11-01: **G6 needs your machines.** pluginval L10, the Steinberg validator, `auval`,
-  Plugalyzer, the arm64 smoke test and the two-host list (Live 10.1 under Rosetta, Live on
-  Windows) cannot run in a Linux container. `docs/handoff.md` has the prompt for the
-  Visual Studio session that takes it from here.
-- 2026-11-01: **The CPU row is not Björn's machine.** On this container at 48 k/64 the
-  figures are p50 1.5 %, p99 4.5 %, p99.9 10.1 %, max 100.7 %, `over_deadline` 1 (reported,
-  not judged - an offline normal-priority harness gets preempted). The brief's budget is
-  written for an M3 Pro, so `perf.py run --harness ... --arch x86_64` has to be re-run there
-  on the heaviest preset (Studio Spectral 2 ms) before the release gate can be called green.
+- 2026-11-02: **The two host checks** (release gate, "the 15-minute list per host"): Ableton
+  Live 10.1 under Rosetta on this Mac and Ableton Live on a Windows machine (`tools.toml` has
+  no Windows host: a friend). Install: copy `build/LessS_artefacts/Release/VST3/Less S.vst3` to
+  `~/Library/Audio/Plug-Ins/VST3/`, rescan. The arm64 smoke ("the Init preset sounds") is a
+  listen too: VST3 only ships, so there is no `auval`; the Standalone beside the VST3 is the
+  native arm64 path.
+- 2026-11-02: **Re-run the CPU row on the power adapter.** It was measured on battery (47 %,
+  discharging), which D.2.1 rules out for the figure of record. It passes with room to spare -
+  heaviest preset p99.9 1.5 % of the deadline - so this is a formality:
+  `python3 scripts/dsp-kit/perf.py run --harness build/LessSHarness_artefacts/Release/LessSHarness --arch x86_64 --presets all --runs 3`
+- 2026-11-02: **Plugalyzer is not on this Mac and not in the kit.** `tiers.md` puts the bundle
+  null test with Plugalyzer at Tier P, and the brief's latency line names it, but there is no
+  `tools.toml` key, no kit step and no install (nor in any sibling repo). What stands in for now:
+  `bounce_null` (harness, bit-exact), `MustDo.test_reported_latency_equals_measured` (9 of 9 in
+  the harness) and pluginval L10 on the shipped bundle. Decide: build Plugalyzer from source
+  beside pluginval-asan and add the step to the kit (a skills-bob item), or accept the stand-ins
+  for 0.1.0 as an exception line.
+- 2026-11-02: **Template items found on the Mac** (skills-bob, the template; none patched in a
+  byte copy):
+  1. CMake's FindPython takes Homebrew's framework Python 3.12, which has no numpy or scipy, so
+     the whole Python suite is silently not registered (`ctest` reports 4 of 4). a-b-see's build
+     on this Mac has the same. Here: `cmake --preset release -DPython3_EXECUTABLE=/usr/bin/python3`
+     (machine-local, in the build cache). Suggested fix: fail the configure loudly, or prefer
+     the `python3` on PATH.
+  2. The release-symbols block (Less S's own, modelled on Horizon Pad's) stripped after
+     signing - arm64 kills every process that loads the bundle - and its dSYMs held no DWARF
+     under LTO. Fixed here (docs/failures.md); **Horizon Pad has the same block**.
+  3. `presetlint render` and `max_click_db` cannot judge an effect (EX-3, now replaced by
+     `PresetBank`); the kit wants an `--in` passthrough and a click measure for effects
+     (the time-domain peak above the band, `PresetBank.test_no_preset_clicks_when_it_works`).
 - 2026-11-01: **Three kit bugs found, none fixable here** (`scripts/dsp-kit/` is a byte copy
   of the kit; a skills-bob item each):
   1. `paramgen.py check` accepts a C++ keyword as an id. `auto` passed the lint and the
@@ -59,17 +81,12 @@ One line each, newest first. Nothing here blocks the rest of the work.
 - 2026-11-01: **Parameter id `auto` renamed to `autoLearn`.** `auto` is a C++ keyword, so the
   generated `Source/Params.h` could not compile. The user-facing name stays "Auto"; no release
   and no tag exists, so no ID freeze is broken (rule 19).
-- 2026-11-01: **Shared editor code is missing.** `Source/oberli/` (LookAndFeel, Strip frame,
-  meters, Loudness, Analysis/FFT, References, RenderSafety) is not in `plugin-template` yet.
-  The editor is still the template's generic stub - every parameter as a plain rotary - with
-  the accent corrected to sage. The DSP publishes everything the real editor needs:
-  `gainReductionDb()`, `bandLevelDb()` (the histogram's number, dB relative when Relative is
-  on) and `popEssEvent()` (the ess map, a lock-free ring). Refresh `Source/oberli/` from the
-  template, then plugin-ui-bob wires it.
-- 2026-11-01: **Faust is not installed in this container.** The G2 prototype is a numpy model,
-  which F.15.1 allows for an effect (and asks for anyway for the STFT stage). No `.dsp` file
-  exists for Less S; `sound design/proto/less_s.py` is the signed-off design and the G5 null
-  reference.
+- 2026-11-02: **Shared editor code is in, the editor is not.** `Source/oberli/` is refreshed
+  from plugin-template 0e7d4f4 (LookAndFeel, Strip frame, meters, preset drawer, About) and
+  tested (`oberli_*`, 4 tests). The editor is still the template's stub with every parameter as
+  a plain rotary; plugin-ui-bob wires the real one (histogram strip, ess map, Learn under
+  Frequency) from what the DSP already publishes (`docs/handoff.md`, "What the editor needs").
+  The interface half of G6 follows it.
 
 ## Gates
 | Gate | State | Evidence (command -> number, test name, log) |
@@ -78,10 +95,10 @@ One line each, newest first. Nothing here blocks the rest of the work.
 | G1 | closed 2026-11-01 | see Decisions; `python3 "sound design/proto/g1_structure.py"` -> LR4 null residual -0.7 dBFS FAIL, parallel bell exact PASS, -8.00 dB at the centre |
 | G2 | closed 2026-11-01 | `sound design/proto/less_s.py` renders real audio; `python3 "sound design/proto/render_references.py"` -> 8 files (gitignored, OneDrive) |
 | G3 | closed 2026-11-01 | `python3 -W error::RuntimeWarning "sound design/proto/measure.py"` -> **82 checks, 0 failed**; the metric table below |
-| G4 | closed 2026-11-01 | `cmake --preset release && cmake --build --preset release` clean (VST3, Standalone, harness); the port is `Source/dsp/` |
-| G5 | closed 2026-11-01 | `ctest --preset all` -> 5/5. `NullAgainstPrototype`, peak / RMS of the residual, no alignment, lag 0 in all four: Split **-148.9 / -173.0**, Wide **-162.4 / -180.4**, Spectral **-144.5 / -165.5**, Relative+Mix **-150.2 / -175.6** dBFS. F.8 asks for < -100 (float with recursive state); the port is two orders of magnitude inside it because the filters are double and only the buffers are float, so the residual sits at the float output's own quantisation. Two goldens in `tools/tests/golden/` |
-| G6 | open | `ctest --preset all` -> 5/5 here. Still to run on Björn's machines: `validate_plugin.py full`, `paramgen.py check --frozen`, pluginval L10, the Steinberg validator, `auval`, Plugalyzer, arm64 smoke, Live 10.1 Rosetta + Live Windows |
-| G7 | - | bank exists (9 presets, `presetlint bank` green); README, manual and notices still to write |
+| G4 | closed 2026-11-01 | `cmake --preset release && cmake --build --preset release` clean (VST3, Standalone, harness); the port is `Source/dsp/`. Mac 2026-11-02: clean, universal |
+| G5 | closed 2026-11-01 | `ctest --preset all` -> 5/5. `NullAgainstPrototype`, peak / RMS of the residual, no alignment, lag 0 in all four: Split **-148.9 / -173.0**, Wide **-162.4 / -180.4**, Spectral **-144.5 / -165.5**, Relative+Mix **-150.2 / -175.6** dBFS. F.8 asks for < -100 (float with recursive state); the port is two orders of magnitude inside it because the filters are double and only the buffers are float, so the residual sits at the float output's own quantisation. Two goldens in `tools/tests/golden/`. Mac 2026-11-02 (arm64, cross-slice tolerance for the x86_64 goldens): `ctest --preset all` -> 11/11. Bank: `PresetBank` (EX-3 closed) |
+| G6 | open | Mac, 2026-11-02, all green: `validate_plugin.py full --plugin "build/LessS_artefacts/Release/VST3/Less S.vst3" --build-cmd "cmake --build --preset release" --test-cmd "ctest --preset all"` -> build PASS, ctest **11/11**, Steinberg validator **47/47** (SDK 3.8.1), pluginval **L10 PASS** (seed 0x48505631, all six rates). `validate_plugin.py full --sanitizer asan` on the asan build with pluginval-asan -> validator 47/47, pluginval L10 PASS. Real-time: rtsan build, `PRODUCT_RTSAN_SELFTEST=1` aborts (exit 134, "unsafe-library-call malloc"), suite under RTSan fast 16 OK (1 skip), render 13 OK. ASan + UBSan (`halt_on_error=1`): fast 16 OK, render 13 OK. `paramgen.py check parameters.csv --manual docs/parameters.md` -> OK, 13 parameters, 1 warning (Lookahead, see Decisions); `--frozen` n/a before the first release. CPU: the row below (on battery). `bundle_signature_and_symbols` green. **Still open**: the two hosts, Plugalyzer (decision), CPU on the adapter, the interface half (editor) |
+| G7 | - | bank exists (9 presets, `presetlint bank` green, `PresetBank` green); README, manual, notices, `docs/presets.md` still to write |
 
 ## Metric table (G3, on the prototype; the port is held to the same numbers by the suite)
 | Target (docs/brief.md) | Command | Number | Verdict |
@@ -104,7 +121,7 @@ One line each, newest first. Nothing here blocks the rest of the work.
 | block-size independence (D.5.1) | `measure.py blocks` | blocks 1, 13, 32, 64, 4096 all exact against 512 | pass |
 | two seeded runs from reset are identical (rule 8) | `measure.py reset` | identical | pass |
 | silence: no tail, no DC, no NaN | `measure.py silence` | tail exact, DC -120 dBFS, finite | pass |
-| CPU at 48 k/64 (rule 20) | `suite_fast` | p99.9 10.1 %, max 100.7 %, over_deadline 1 | **not Björn's machine** |
+| CPU at 48 k/64, x86_64 slice under Rosetta, M3 Pro (rule 20) | `perf.py run --harness <release harness> --arch x86_64 --presets all --runs 3` (60 s each) | heaviest preset Studio Spectral 2 ms: p50 0.9, p99 1.2, **p99.9 1.5 %**, max 6.1 % (scheduling); every preset p99.9 <= 2.3 %, every max reads as scheduling (moves between runs; one 486 % block in Female Lead Natural, over_deadline 1, reported); idle 0.6 %; first block <= 5 % | pass (**on battery**: re-run on the adapter) |
 
 ## Listening debt
 - 2026-11-01: **everything.** The design is measured and nulled but has never been heard.
@@ -136,37 +153,38 @@ One line each, newest first. Nothing here blocks the rest of the work.
   `DefiningFeatures.test_split_reduces_the_band_and_leaves_the_rest`. Friends: on a bright
   consonant, Wide dulls a little more than Split - which is the reason Split is the default.
   Re-checked when the detector's band changes.
-- **EX-3 2026-11-01: `presetlint` cannot check this bank.** `presetlint bank --harness` and
-  `presetlint render` report 2 and 20 errors that are not defects: `check_init` compares a
-  normalised echo against a plain choice index (Mode 1 of 3, Speed 1 of 3), and
-  `presetlint render` drives an effect with the harness's default impulse, so its true-peak
-  (-0.0 dBTP) and click (0.0 dB) figures are the impulse's. The CMake test therefore runs
-  `presetlint bank` **without** `--harness`, and the two properties it would have checked are
-  verified in the suite against the plugin's own normalisation:
-  `Properties.test_init_preset_equals_the_table_defaults` and
-  `Properties.test_preset_listing_matches_the_csv`. **Unacceptable if** the bank's
-  per-preset health and loudness spread are still unverified at the release gate: the
-  remaining work is `PresetBank` in `tools/tests/test_plugin.py` (render every preset through
-  the phrase: NaN, clipping, true peak, click, integrated LUFS within +/-1 LU of the median,
-  state round trip). Not written yet - the next task in the handoff. `docs/presets.md` is
-  generated by `presetlint render --md` and is therefore **not committed yet**: the one run
-  that produced it reported a worst block of 148 % and a level of +0.0 LU for every preset,
-  which are the impulse's figures, not the bank's. It belongs to G7, after this is fixed.
-  Re-checked when the kit is fixed in bob-skills.
+- **EX-3 2026-11-01, closed 2026-11-02: `presetlint` cannot check this bank.** Replaced by
+  `PresetBank` in `tools/tests/test_plugin.py` (label render): every row of presets.csv renders
+  the test phrase - NaN/Inf 0, no clipped sample, true peak under -1 dBTP, integrated LUFS
+  within +/-1 LU of the bank median (measured: span -0.17 to +0.30 LU around -22.06 LUFS, Init
+  included); no click (a raised-cosine burst train at the preset's Frequency, time-domain peak
+  above max(12 kHz, 1.7 x Frequency) under -70 dBFS; bank -79.4 at worst); state round trip
+  bytewise and the render after the load bit-identical. Each shown failing first
+  (docs/failures.md). `presetlint bank` still runs without `--harness` (the `check_init`
+  index bug stays a kit item). `docs/presets.md` (`presetlint render --md`) still carries the
+  impulse's figures and belongs to G7 once the kit can feed an effect.
 
 ## Handoff
 Task: build Less S from G1 to the release gate at Tier P.
-Plan: 1. [x] G1 algorithm decision 2. [x] G2 numpy prototype 3. [x] G3 measure (82 checks)
-4. [x] G4 port to C++ 5. [x] G5 null + preset bank 6. [ ] **G6 validate - needs Björn's
-machines** (next) 7. [ ] G7 product (README, manual, notices, golden renders).
-Working tree: clean at the commit this line ships in. Build: green (`cmake --build --preset
-release`). Tests: `ctest --preset all` 5 pass / 0 fail (`suite_fast` 29 s, `suite_render` 39 s,
-`harness_contract`, `parameter_table`, `preset_bank`).
-Open questions for the owner: the Waiting-for-Björn list above; the two that touch the sketch
-are Split's filter structure and the Spectral window.
-Next command: `docs/handoff.md` - the prompt for the Visual Studio session.
+Plan: 1. [x] G1 2. [x] G2 3. [x] G3 (82 checks) 4. [x] G4 5. [x] G5 + bank (EX-3 closed)
+6. [ ] **G6** - sound side green on the Mac; open: hosts, Plugalyzer, CPU on the adapter, the
+editor's half 7. [ ] G7 product (README, manual, notices, golden renders).
+Working tree: clean at the commit this line ships in. Build: green (`cmake --preset release
+-DPython3_EXECUTABLE=/usr/bin/python3 && cmake --build --preset release`). Tests: `ctest
+--preset all` 11 pass / 0 fail (fast label 18 s).
+Open questions for the owner: the Waiting-for-Björn list; the two that touch the sketch are
+Split's filter structure and the Spectral window.
+Next: plugin-ui-bob wires the editor on `Source/oberli/` (G2-G5 of the interface side), then
+the interface half of G6; in parallel Björn's host checks and the listening checkpoint.
 
 ## Decisions
+- 2026-11-02: **The click check for an effect is a time-domain peak above the band**, not
+  `max_click_db` (noise esses read -0.2 dB dry) and not the brief's per-bin sideband figure (a
+  click spreads over every bin; a stepped gain read under -90 dBFS per bin). Limit -70 dBFS:
+  the bank measures -79.4 at worst, a stepped-gain build -53.0 at best. Rejected if a click
+  audible on the phrase passes it.
+- 2026-11-02: **`getProgramName` returns "Default"** until the preset drawer is wired; then
+  the active preset's name, as Horizon Pad does.
 - 2026-11-01: **G1 family.** De-esser, `dsp-selection.md` S.2 row: split-band, ~5-10 kHz with
   peak tracking, relative threshold, ~1 ms attack with look-ahead, limited range. Less S is
   **one detector, three appliers**.

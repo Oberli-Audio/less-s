@@ -9,6 +9,8 @@ build commands, the harness, the tests, the validators, the release.
   2022 (Windows). JUCE is fetched by CMake at the pinned commit; nothing to install.
 - Python 3.9+ with `numpy` and `scipy` for the test suite and the measurement scripts
   (`pip3 install --user numpy scipy`). Without them CMake registers no tests.
+  CMake may find a different Python than your shell (on the Mac Homebrew's framework 3.12):
+  if `ctest -N` lists no `suite_fast`, configure with `-DPython3_EXECUTABLE=$(which python3)`.
 - The machine file `~/.config/oberli/tools.toml` (`python3 scripts/dsp-kit/toolchain.py init`,
   then fill in the paths): Homebrew LLVM for the RTSan build, Faust, pluginval, the hosts.
 
