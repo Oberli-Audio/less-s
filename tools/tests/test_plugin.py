@@ -276,6 +276,26 @@ class Properties(Timed):
             xb, _ = K.read_wav(d / "b.wav")
             self.assertTrue((xa == xb).all())
 
+    def test_state_round_trip_is_bytewise_for_every_parameter(self):       # D.5.3, rule 19
+        """The kit's test (test_template.py): the defaults, then every parameter at an odd
+        normalised value, saved three times: one text. A skewed range (a second float round
+        trip on save) or a compiler that fuses start + span * n into one FMA (arm64) moves a
+        value here."""
+        import subprocess
+        listed = json.loads(subprocess.run(K.harness_cmd(HARNESS) + ["--list-params"],
+                                           capture_output=True, text=True, check=True).stdout)
+        odd = {p["id"]: 0.3 if p.get("steps", 0) in (0, None) else round(0.3 * (p["steps"] - 1)) / (p["steps"] - 1)
+               for p in listed if p.get("steps", 0) != 2}           # bools (and bypass) stay at their default
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for name, params in (("defaults", None), ("odd", odd)):
+                run(params, state_out=d / "a.state", seconds=0.1)
+                run(state_in=d / "a.state", state_out=d / "b.state", seconds=0.1)
+                run(state_in=d / "b.state", state_out=d / "c.state", seconds=0.1)
+                a, b, c = ((d / n).read_bytes() for n in ("a.state", "b.state", "c.state"))
+                self.assertEqual(a, b, "%s: the state changed on the first load and save" % name)
+                self.assertEqual(b, c, "%s: the state drifts on every load and save" % name)
+
     def test_init_preset_equals_the_table_defaults(self):                  # F.14.3
         """Init is the parameter table, with nothing of its own.
 

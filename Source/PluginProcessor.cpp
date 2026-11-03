@@ -1,6 +1,9 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "State.h"
+#include "oberli/RenderSafety.h"
+
+#include <ProductData.h>
 
 #include <cmath>
 
@@ -11,6 +14,19 @@ std::atomic<float>* param (juce::AudioProcessorValueTreeState& apvts, const char
     auto* p = apvts.getRawParameterValue (id);
     jassert (p != nullptr);   // the table and the code disagree: parameters.csv is the source
     return p;
+}
+
+/** A file compiled into the plugin (CMakeLists.txt: ProductData) by its name, or an empty block. */
+juce::MemoryBlock productFile (const juce::String& fileName)
+{
+    for (int i = 0; i < ProductData::namedResourceListSize; ++i)
+        if (fileName == ProductData::getNamedResourceOriginalFilename (ProductData::namedResourceList[i]))
+        {
+            int size = 0;
+            const auto* data = ProductData::getNamedResource (ProductData::namedResourceList[i], size);
+            return { data, (size_t) size };
+        }
+    return {};
 }
 } // namespace
 
@@ -33,6 +49,23 @@ LessSAudioProcessor::LessSAudioProcessor()
     stereoParam = param (apvts, Params::stereo);
     mixParam = param (apvts, Params::mix);
     bypassParam = param (apvts, Params::bypassParameterId);
+
+    // The factory bank (presets.csv and presets/, compiled in) and the User folder, in the
+    // family's format (State.h); the Strip frame's header, drawer and menu work on it.
+    presets = std::make_unique<oberli::PresetLibrary> (
+        productFile ("presets.csv").toString(), productFile,
+        [this] (const juce::String& name, const juce::String& category, const juce::String& description, bool factory)
+        {
+            return lesss::State::presetXml (apvts, name, "", category, description, factory);
+        },
+        [this] (const juce::XmlElement& document)
+        {
+            auto* state = lesss::State::stateOf (document);
+            return state != nullptr && lesss::State::fromXml (*state, apvts);
+        });
+    // A new instance holds the parameter table's defaults: the Init preset, the bank's first.
+    if (! presets->factoryPresets().empty())
+        presets->restoreActive ("factory:" + presets->factoryPresets().front().slug);
 
     // 20 Hz is often enough for Learn: the analysis needs two seconds of audio first, so
     // the poll costs one atomic read per 50 ms (D.1: never triggerAsyncUpdate from audio).
@@ -79,6 +112,12 @@ void LessSAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     }
     rmsL.store (0.0f);
     rmsR.store (0.0f);
+    peaks.reset();
+    grTap.reset();
+    audioClock.store (0.0);
+    // the display's spectra: 1/6 octave, 4096-point FFT, 0.3 s average (allocates: not the audio thread)
+    inAnalyser.prepare (sampleRate, oberli::BandLayout::Resolution::sixth, 12);
+    outAnalyser.prepare (sampleRate, oberli::BandLayout::Resolution::sixth, 12);
 
     const auto p = readParameters();
     reportedLatency = engine.latencyFor (p);
@@ -145,7 +184,19 @@ void LessSAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     const auto p = readParameters();
     updateLatency (p);
+    // the display's copies only while someone can watch them; a bounce renders the same audio
+    const bool feed = oberli::render::modeFor (*this).feedDisplay && displayActive.load (std::memory_order_relaxed);
+    if (feed)
+        inAnalyser.push (buffer, 0, numSamples);
     engine.process (buffer, p);
+    audioClock.store (engine.positionSeconds(), std::memory_order_relaxed);
+    if (oberli::render::modeFor (*this).feedDisplay)
+    {
+        peaks.push (buffer, 0, numSamples);
+        grTap.push (juce::Decibels::decibelsToGain (-engine.gainReductionDb()));
+    }
+    if (feed)
+        outAnalyser.push (buffer, 0, numSamples);
 
     // the level the editor shows (20 ms RMS per channel, D.6.2)
     auto* l = buffer.getWritePointer (0);
@@ -171,6 +222,7 @@ lesss::dsp::LearnResult LessSAudioProcessor::runLearnNow()
 {
     const auto result = engine.runLearn();
     lastLearn = result;
+    ++learnRuns;
     if (! result.found)
         return result;
     // Written as a user edit so the host records one undo step and the preset shows
@@ -202,7 +254,10 @@ juce::AudioProcessorEditor* LessSAudioProcessor::createEditor()
 
 void LessSAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    copyXmlToBinary (*lesss::State::toXml (apvts), destData);
+    auto xml = lesss::State::toXml (apvts);
+    if (auto* extra = xml->getChildByName ("Extra"); extra != nullptr && presets->activeId().isNotEmpty())
+        extra->setAttribute ("preset", presets->activeId());   // which preset the sound came from, for the header
+    copyXmlToBinary (*xml, destData);
 }
 
 void LessSAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
@@ -219,7 +274,11 @@ bool LessSAudioProcessor::loadState (const void* data, int sizeInBytes)
     if (xml == nullptr)
         return false;
     auto* state = lesss::State::stateOf (*xml);
-    return state != nullptr && lesss::State::fromXml (*state, apvts);
+    if (state == nullptr || ! lesss::State::fromXml (*state, apvts))
+        return false;
+    const auto* extra = state->getChildByName ("Extra");
+    presets->restoreActive (extra != nullptr ? extra->getStringAttribute ("preset") : juce::String());
+    return true;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

@@ -63,6 +63,16 @@ public:
 
     bool isArmed() const noexcept { return armed.load (std::memory_order_relaxed); }
 
+    /** For the editor's progress hairline: the captured share of the window, 0..1, or -1
+        when no Learn is capturing. Any thread; reads two atomics and the buffer's size,
+        which only prepare() changes. */
+    float progress() const noexcept
+    {
+        if (! armed.load (std::memory_order_relaxed) || buffer.empty())
+            return -1.0f;
+        return std::min (1.0f, (float) captured.load (std::memory_order_relaxed) / (float) buffer.size());
+    }
+
     bool isReady() const noexcept
     {
         return armed.load (std::memory_order_relaxed)

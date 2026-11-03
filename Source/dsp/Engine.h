@@ -444,6 +444,10 @@ public:
 
     // Learn, from the message thread (or the harness, after the render)
     bool learnReady() const noexcept { return learn.isReady(); }
+    /** Learn's captured share, 0..1, or -1 when not capturing (the editor's hairline). */
+    float learnProgress() const noexcept { return learn.progress(); }
+    /** Audio thread: the clock the ess map's events are stamped with, in seconds. */
+    double positionSeconds() const noexcept { return (double) samplePosition / sampleRate; }
     LearnResult runLearn()
     {
         auto r = learn.analyse();

@@ -117,6 +117,8 @@ set(PRODUCT_SOURCES
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
+    Source/SibilanceDisplay.cpp
+    Source/SibilanceDisplay.h
     Source/Params.h
     Source/State.h
     Source/dsp/Constants.h

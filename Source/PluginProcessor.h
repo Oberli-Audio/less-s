@@ -9,6 +9,9 @@
 
 #include "Params.h"
 #include "dsp/Engine.h"
+#include "oberli/Analysis.h"
+#include "oberli/MeterTaps.h"
+#include "oberli/PresetLibrary.h"
 
 /*  Less S - the processor.
 
@@ -80,6 +83,27 @@ public:
     /** The next caught ess, or false when the ring is empty (the ess map, sketch 4.4). */
     bool popEssEvent (lesss::dsp::EssEvent& out) noexcept { return engine.popEvent (out); }
 
+    /** The engine's clock in seconds, the time base of the ess events. */
+    double audioSeconds() const noexcept { return audioClock.load (std::memory_order_relaxed); }
+
+    /** The output's sample peak and clip flag, and the gain reduction, for the meters
+        (Source/oberli/MeterTaps.h). In Ess listen the output is the band, so the level meter
+        shows the band's level (sketch 4.5). */
+    oberli::PeakTap& outputPeaks() noexcept { return peaks; }
+    oberli::GainReductionTap& gainReductionTap() noexcept { return grTap; }
+
+    /** Input and output spectrum for the display, 1/6 octave. Fed only while an editor is
+        open and the host plays in real time (Source/oberli/RenderSafety.h): the audio path
+        never depends on either. */
+    oberli::Analyser& inputSpectrum() noexcept { return inAnalyser; }
+    oberli::Analyser& outputSpectrum() noexcept { return outAnalyser; }
+    void setDisplayActive (bool active) noexcept { displayActive.store (active, std::memory_order_relaxed); }
+
+    /** The presets (the factory bank compiled in, the User folder, the active one): the Strip
+        frame's header, drawer and menu work on it. Message thread. */
+    oberli::PresetLibrary& presetLibrary() noexcept { return *presets; }
+    oberli::PresetHost& presetHost() noexcept { return *presets; }
+
     //==========================================================================
     // Learn (sketch 4.2). The analysis never runs on the audio thread.
 
@@ -96,6 +120,12 @@ public:
 
     /** The last Learn result, for the editor's "No esses found yet" line and the harness. */
     lesss::dsp::LearnResult lastLearnResult() const { return lastLearn; }
+
+    /** How many Learn analyses have run (message thread), so the editor sees a new result. */
+    int learnCount() const noexcept { return learnRuns; }
+
+    /** Learn's captured share 0..1, or -1 when it is not capturing (the hairline). */
+    float learnProgress() const noexcept { return engine.learnProgress(); }
 
 private:
     void timerCallback() override;
@@ -121,6 +151,13 @@ private:
 
     lesss::dsp::Engine engine;
     lesss::dsp::LearnResult lastLearn;
+    int learnRuns = 0;
+    std::atomic<double> audioClock { 0.0 };
+    oberli::PeakTap peaks;
+    oberli::GainReductionTap grTap;
+    oberli::Analyser inAnalyser, outAnalyser;
+    std::atomic<bool> displayActive { false };
+    std::unique_ptr<oberli::PresetLibrary> presets;
     double currentSampleRate = 48000.0;
     int reportedLatency = 0;
     std::atomic<float> rmsL { 0.0f }, rmsR { 0.0f };

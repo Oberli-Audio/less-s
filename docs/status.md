@@ -1,11 +1,11 @@
-# Status - Less S 0.1.0 (2026-11-02)
+# Status - Less S 0.1.0 (2026-11-03)
 Tier P, track E (effect), at gate G6. Recipe D.8.1.
 
 G1 to G5 are closed with evidence and hold on Björn's Mac (M3 Pro, arm64 and the x86_64 slice
 under Rosetta). G6's unattended sound side is green here: validators, RTSan, ASan + UBSan, the
 CPU row, the bank (EX-3 closed). What is left of G6 needs Björn: the two hosts, a decision on
-Plugalyzer, the CPU row once more on the power adapter, and the editor's half of G6 (the editor
-is still the stub; the shared code it needs arrived with this checkpoint).
+Plugalyzer, the CPU row once more on the power adapter, and the editor in a host (built
+2026-11-03, measured offscreen; `docs/ui/`).
 
 ## Waiting for Björn
 One line each, newest first. Nothing here blocks the rest of the work.
@@ -37,6 +37,12 @@ One line each, newest first. Nothing here blocks the rest of the work.
   2. The release-symbols block (Less S's own, modelled on Horizon Pad's) stripped after
      signing - arm64 kills every process that loads the bundle - and its dSYMs held no DWARF
      under LTO. Fixed here (docs/failures.md); **Horizon Pad has the same block**.
+  4. Shared code: `PillToggle::getPreferredWidth` (and `type::width`) measure caps without the
+     label font's 0.10 tracking, so a long word is clipped ("RELATI"). Worked around in
+     `PluginEditor.cpp` (`pillWidth`); the fix belongs in `Source/oberli/Buttons.cpp`.
+  5. The snapshot tool feeds noise only, so an effect whose display needs real material (the
+     ess map stays empty on continuous noise) cannot be rendered as it is used. An `--in=<wav>`
+     flag was added for this pass, rendered, and reverted (the tool is a template companion).
   3. `presetlint render` and `max_click_db` cannot judge an effect (EX-3, now replaced by
      `PresetBank`); the kit wants an `--in` passthrough and a click measure for effects
      (the time-domain peak above the band, `PresetBank.test_no_preset_clicks_when_it_works`).
@@ -81,12 +87,15 @@ One line each, newest first. Nothing here blocks the rest of the work.
 - 2026-11-01: **Parameter id `auto` renamed to `autoLearn`.** `auto` is a C++ keyword, so the
   generated `Source/Params.h` could not compile. The user-facing name stays "Auto"; no release
   and no tag exists, so no ID freeze is broken (rule 19).
-- 2026-11-02: **Shared editor code is in, the editor is not.** `Source/oberli/` is refreshed
-  from plugin-template 0e7d4f4 (LookAndFeel, Strip frame, meters, preset drawer, About) and
-  tested (`oberli_*`, 4 tests). The editor is still the template's stub with every parameter as
-  a plain rotary; plugin-ui-bob wires the real one (histogram strip, ess map, Learn under
-  Frequency) from what the DSP already publishes (`docs/handoff.md`, "What the editor needs").
-  The interface half of G6 follows it.
+- 2026-11-03: **The editor is built; look at it in a host.** `Source/PluginEditor.*` and
+  `Source/SibilanceDisplay.*` on the Strip frame, from the sketch: DETECT, REDUCE, SIBILANCE
+  (spectrum, band-level histogram with a draggable Threshold line, ess map), OUTPUT. Renders in
+  `docs/ui/` (100, 150, 200 %). Three departures from the sketch, for you to accept or reject:
+  the window is **880 x 612** (sketch 584: Learn and Auto share a row, Relative gets its own,
+  because the three do not fit 232 px at real widths); the legend drops the Threshold key (the
+  strip's accent line and its tooltip carry it); the ess bars are a tinted body with a solid
+  accent cap instead of solid accent (rule 6: solid bars took the render to 3.0 % saturated, the
+  limit is 2 %).
 
 ## Gates
 | Gate | State | Evidence (command -> number, test name, log) |
@@ -97,7 +106,7 @@ One line each, newest first. Nothing here blocks the rest of the work.
 | G3 | closed 2026-11-01 | `python3 -W error::RuntimeWarning "sound design/proto/measure.py"` -> **82 checks, 0 failed**; the metric table below |
 | G4 | closed 2026-11-01 | `cmake --preset release && cmake --build --preset release` clean (VST3, Standalone, harness); the port is `Source/dsp/`. Mac 2026-11-02: clean, universal |
 | G5 | closed 2026-11-01 | `ctest --preset all` -> 5/5. `NullAgainstPrototype`, peak / RMS of the residual, no alignment, lag 0 in all four: Split **-148.9 / -173.0**, Wide **-162.4 / -180.4**, Spectral **-144.5 / -165.5**, Relative+Mix **-150.2 / -175.6** dBFS. F.8 asks for < -100 (float with recursive state); the port is two orders of magnitude inside it because the filters are double and only the buffers are float, so the residual sits at the float output's own quantisation. Two goldens in `tools/tests/golden/`. Mac 2026-11-02 (arm64, cross-slice tolerance for the x86_64 goldens): `ctest --preset all` -> 11/11. Bank: `PresetBank` (EX-3 closed) |
-| G6 | open | Mac, 2026-11-02, all green: `validate_plugin.py full --plugin "build/LessS_artefacts/Release/VST3/Less S.vst3" --build-cmd "cmake --build --preset release" --test-cmd "ctest --preset all"` -> build PASS, ctest **11/11**, Steinberg validator **47/47** (SDK 3.8.1), pluginval **L10 PASS** (seed 0x48505631, all six rates). `validate_plugin.py full --sanitizer asan` on the asan build with pluginval-asan -> validator 47/47, pluginval L10 PASS. Real-time: rtsan build, `PRODUCT_RTSAN_SELFTEST=1` aborts (exit 134, "unsafe-library-call malloc"), suite under RTSan fast 16 OK (1 skip), render 13 OK. ASan + UBSan (`halt_on_error=1`): fast 16 OK, render 13 OK. `paramgen.py check parameters.csv --manual docs/parameters.md` -> OK, 13 parameters, 1 warning (Lookahead, see Decisions); `--frozen` n/a before the first release. CPU: the row below (on battery). `bundle_signature_and_symbols` green. **Still open**: the two hosts, Plugalyzer (decision), CPU on the adapter, the interface half (editor) |
+| G6 | open | Mac, 2026-11-02, all green: `validate_plugin.py full --plugin "build/LessS_artefacts/Release/VST3/Less S.vst3" --build-cmd "cmake --build --preset release" --test-cmd "ctest --preset all"` -> build PASS, ctest **11/11**, Steinberg validator **47/47** (SDK 3.8.1), pluginval **L10 PASS** (seed 0x48505631, all six rates). `validate_plugin.py full --sanitizer asan` on the asan build with pluginval-asan -> validator 47/47, pluginval L10 PASS. Real-time: rtsan build, `PRODUCT_RTSAN_SELFTEST=1` aborts (exit 134, "unsafe-library-call malloc"), suite under RTSan fast 16 OK (1 skip), render 13 OK. ASan + UBSan (`halt_on_error=1`): fast 16 OK, render 13 OK. `paramgen.py check parameters.csv --manual docs/parameters.md` -> OK, 13 parameters, 1 warning (Lookahead, see Decisions); `--frozen` n/a before the first release. CPU: the row below (on battery). `bundle_signature_and_symbols` green. **Still open**: the two hosts, Plugalyzer (decision), CPU on the adapter. **Interface side (2026-11-03)**: editor built; snapshot pass at 100/150/200 % (`docs/ui/`); `snapshot_contrast.py --metrics --theme bone` -> 0 metrics outside the limits at all three scales (saturated 1.62 / 1.67 / 1.69 %, 9 palette colours, nothing brighter than Bone); text contrast of the display's own labels at 2x -> legend, strip axis, frequency labels all AA (worst 4.95:1); `validate_plugin.py full` with the editor -> ctest 11/11, validator 47/47, pluginval L10 PASS (editor open/close inside); RTSan suite again clean (fast 17, render 13). Still open on the interface side: the host checks (scaling on Windows, keyboard focus, generic editor, automation from the GUI), and the analyser push is not exercised under RTSan (the harness opens no editor) |
 | G7 | - | bank exists (9 presets, `presetlint bank` green, `PresetBank` green); README, manual, notices, `docs/presets.md` still to write |
 
 ## Metric table (G3, on the prototype; the port is held to the same numbers by the suite)
@@ -174,10 +183,17 @@ Working tree: clean at the commit this line ships in. Build: green (`cmake --pre
 --preset all` 11 pass / 0 fail (fast label 18 s).
 Open questions for the owner: the Waiting-for-Björn list; the two that touch the sketch are
 Split's filter structure and the Spectral window.
-Next: plugin-ui-bob wires the editor on `Source/oberli/` (G2-G5 of the interface side), then
-the interface half of G6; in parallel Björn's host checks and the listening checkpoint.
+Next: Björn in a host - the editor, the two host checks, the listening checkpoint; then G7
+(README, manual, notices, golden renders, `docs/presets.md` once the kit can feed an effect).
 
 ## Decisions
+- 2026-11-03: **The editor's display reads the DSP, never a formula of its own** (rule 9): the
+  band is drawn and its -3 dB edges found on `k::detectorMagnitude`; the histogram bins
+  `bandLevelDb()`; the ess map drains the engine's event ring on the engine's clock
+  (`audioSeconds()`); the spectra come from two `oberli::Analyser`s fed only while an editor is
+  open and the host plays in real time (`RenderSafety`), so a bounce renders the same audio.
+- 2026-11-03: **The Histogram switch is machine-local** (`MachineSettings`, key
+  `lessS.histogram`), like the GUI scale: not a parameter, not in presets (sketch 4.3).
 - 2026-11-02: **The click check for an effect is a time-domain peak above the band**, not
   `max_click_db` (noise esses read -0.2 dB dry) and not the brief's per-bin sideband figure (a
   click spreads over every bin; a stepped gain read under -90 dBFS per bin). Limit -70 dBFS:
